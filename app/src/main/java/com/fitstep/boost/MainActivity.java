@@ -36,11 +36,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // AdMob शुरू करना
+        // 1. AdMob शुरू करना
         try {
             MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
         } catch (Exception ignored) {}
 
+        // 2. मुख्य WebView (वही लेआउट जिसने लॉगिन कराया था)
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -54,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // ऐड के लिए जावास्क्रिप्ट इंटरफेस
+        // AdMob के लिए जावास्क्रिप्ट ब्रिज
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
@@ -120,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
                         webView.evaluateJavascript("if(window.onAdWatched) { window.onAdWatched(); }", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, कृपया 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
@@ -138,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
-        // वही मूल Chrome User-Agent जिससे लॉगिन खुला था
+        // बिल्कुल वही User-Agent जिससे Google Auth पास हुआ था
         String chromeAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36";
         settings.setUserAgentString(chromeAgent);
     }
