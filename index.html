@@ -1,367 +1,181 @@
 <!DOCTYPE html>
 <html lang="hi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FitStep Boost</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { margin: 0; padding: 24px 16px; background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    .card { background: #1e293b; border-radius: 16px; padding: 24px; width: 100%; max-width: 420px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center; }
-    h1 { font-size: 24px; margin-bottom: 8px; color: #38bdf8; }
-    p { font-size: 14px; color: #94a3b8; line-height: 1.5; }
-    .btn { background: #0284c7; color: white; border: none; padding: 14px 20px; border-radius: 10px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 14px; transition: background 0.2s; }
-    .btn:hover { background: #0369a1; }
-    .btn:disabled { background: #475569; cursor: not-allowed; }
-    .btn-logout { background: #ef4444; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; margin-top: 8px; }
-    .btn-logout:hover { background: #dc2626; }
-    .user-box { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; margin: 14px 0; text-align: center; }
-    .user-email { color: #38bdf8; font-weight: 600; font-size: 14px; word-break: break-all; margin-bottom: 4px; }
-    .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 130px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-    .counter { font-size: 15px; font-weight: 600; color: #38bdf8; margin-top: 14px; }
-    .alert-card { border-radius: 10px; padding: 14px; margin-top: 14px; text-align: center; }
-    .alert-pending { background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; }
-    .alert-denied { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background-color: #0b1320;
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .card {
+      background-color: #162235;
+      border: 1px solid #22344d;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 420px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #38bdf8;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .user-box {
+      background-color: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .user-label {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .user-email {
+      font-size: 14px;
+      font-weight: 600;
+      color: #38bdf8;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-login {
+      background-color: #0284c7;
+      color: #ffffff;
+    }
+    .btn-ad {
+      background-color: #0284c7;
+      color: #ffffff;
+      margin-bottom: 12px;
+    }
+    .btn-ad:disabled {
+      background-color: #334155;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+    .btn-logout {
+      background-color: #ef4444;
+      color: #ffffff;
+      padding: 6px 14px;
+      font-size: 12px;
+      border-radius: 6px;
+      width: auto;
+      display: inline-block;
+    }
+    .counter {
+      font-size: 13px;
+      font-weight: 600;
+      color: #38bdf8;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .log-box {
+      background-color: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 120px;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #cbd5e1;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h1>FitStep Boost</h1>
-    <p>Google Fit स्टेप्स ऑटोमेशन (सुरक्षित सिंक टूल)</p>
+    <div class="title">FitStep Boost</div>
+    <div class="subtitle">Google Fit स्टेप्स ऑटोमेशन (सुरक्षित सिंक टूल)</div>
 
-    <div id="authSection">
-      <button class="btn" id="loginBtn" onclick="requestToken()">Google Fit से कनेक्ट करें</button>
+    <!-- Login Section -->
+    <div id="login-section">
+      <button class="btn btn-login" onclick="triggerGoogleLogin()">Google Fit से कनेक्ट करें</button>
     </div>
 
-    <div id="appSection" style="display: none;">
+    <!-- Dashboard Section -->
+    <div id="dashboard-section" class="hidden">
       <div class="user-box">
-        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">लॉगिन अकाउंट</div>
-        <div class="user-email" id="displayEmail">ईमेल लोड हो रहा है...</div>
-        <button class="btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
+        <div class="user-label">लॉगिन अकाउंट</div>
+        <div id="user-email-text" class="user-email">--</div>
+        <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
 
-      <div id="statusAlertSection" style="display: none;" class="alert-card">
-        <div id="statusAlertTitle" style="font-weight: 700; font-size: 15px;"></div>
-        <div id="statusAlertMsg" style="color: #cbd5e1; font-size: 13px; margin-top: 6px;"></div>
-      </div>
-
-      <div id="syncSection" style="display: none;">
-        <button class="btn" id="syncBtn" onclick="startSyncProcess()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
-        <div class="counter" id="adCounter">देखे गए ऐड्स: 0 / 5</div>
-      </div>
+      <button id="ad-btn" class="btn btn-ad" onclick="watchAd()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+      <div id="counter-text" class="counter">देखे गए ऐड्स: 0 / 5</div>
     </div>
 
-    <div class="status-box" id="statusLog">तैयार... कृपया लॉगिन करें।</div>
+    <!-- Console Log -->
+    <div id="log-box" class="log-box">तैयार... कृपया लॉगिन करें।</div>
   </div>
 
   <script>
-    const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
-    const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid";
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPc_Vb9uVoHeU21RPIvJVoC4zN924ZaNWKJfn3SDEil7QkqZxTjCnhrDfvIgK61zkVLg/exec";
-
-    let tokenClient;
-    let accessToken = localStorage.getItem("fit_token") || null;
-    let userEmail = localStorage.getItem("fit_email") || null;
     let adsWatched = 0;
+    const TOTAL_ADS = 5;
+    let currentUser = null;
 
     function log(msg) {
-      const box = document.getElementById("statusLog");
-      box.textContent += "\n" + msg;
+      const box = document.getElementById("log-box");
+      box.innerHTML += "<br>" + msg;
       box.scrollTop = box.scrollHeight;
     }
 
-    window.onload = function() {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: async (resp) => {
-          if (resp.error) {
-            log("लॉगिन त्रुटि: " + resp.error);
-            return;
-          }
-          accessToken = resp.access_token;
-          localStorage.setItem("fit_token", accessToken);
-          await loadUserProfileAndCheck();
-        },
+    // Google Sign-In Initializer
+    function triggerGoogleLogin() {
+      log("लॉगिन विंडो खोली जा रही है...");
+      google.accounts.id.initialize({
+        client_id: "883838274712-42qge0o8g6718d7jef4b1l4c88r04e9o.apps.googleusercontent.com",
+        callback: handleCredentialResponse,
+        auto_select: true
       });
+      google.accounts.id.prompt();
+    }
 
-      if (accessToken) {
-        loadUserProfileAndCheck();
-      }
-    };
-
-    async function loadUserProfileAndCheck() {
-      document.getElementById("authSection").style.display = "none";
-      document.getElementById("appSection").style.display = "block";
-
+    function handleCredentialResponse(response) {
       try {
-        log("यूजर प्रोफाइल लोड हो रही है...");
-        const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { "Authorization": `Bearer ${accessToken}` }
-        });
-        
-        if (res.ok) {
-          const info = await res.json();
-          userEmail = (info.email || "").trim().toLowerCase();
-          localStorage.setItem("fit_email", userEmail);
-          document.getElementById("displayEmail").innerText = userEmail;
-          log("अकाउंट: " + userEmail);
-          
-          await verifyAccessWithSheet(userEmail);
-        } else {
-          logout();
-        }
-      } catch (e) {
-        log("प्रोफाइल लोड समस्या: " + e.message);
-      }
-    }
-
-    function verifyAccessWithSheet(email) {
-      log("एडमिन अनुमति (Whitelist) चेक की जा रही है...");
-      
-      return new Promise((resolve) => {
-        const callbackName = "handleSheetAuth_" + Date.now();
-        
-        window[callbackName] = function(result) {
-          delete window[callbackName];
-          if (scriptTag && scriptTag.parentNode) scriptTag.parentNode.removeChild(scriptTag);
-          
-          const alertSection = document.getElementById("statusAlertSection");
-          const alertTitle = document.getElementById("statusAlertTitle");
-          const alertMsg = document.getElementById("statusAlertMsg");
-          const syncSec = document.getElementById("syncSection");
-
-          if (result.allowed === true) {
-            alertSection.style.display = "none";
-            syncSec.style.display = "block";
-            log("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          } else if (result.status === "PENDING") {
-            alertSection.className = "alert-card alert-pending";
-            alertSection.style.display = "block";
-            syncSec.style.display = "none";
-            alertTitle.innerText = "⏳ एक्सेस पेंडिंग (Pending)";
-            alertMsg.innerText = "आपकी रिक्वेस्ट एडमिन के पास पहुँच गई है। एडमिन द्वारा 'Approved' करते ही सिंक अनलॉक हो जाएगा।";
-            log("⏳ ईमेल Google Sheet में दर्ज हो चुका है (Status: Pending)। एडमिन की अनुमति का इंतज़ार करें।");
-          } else {
-            alertSection.className = "alert-card alert-denied";
-            alertSection.style.display = "block";
-            syncSec.style.display = "none";
-            alertTitle.innerText = "🔒 एक्सेस अस्वीकृत (Blocked)";
-            alertMsg.innerText = "यह अकाउंट ब्लॉक या अनधिकृत है। कृपया एडमिन से संपर्क करें।";
-            log("❌ एक्सेस अस्वीकृत: " + (result.status || "Not Allowed"));
-          }
-          resolve();
-        };
-
-        const scriptTag = document.createElement("script");
-        scriptTag.src = `${SCRIPT_URL}?email=${encodeURIComponent(email)}&callback=${callbackName}`;
-        scriptTag.onerror = function() {
-          log("शीट से कनेक्ट होने में समस्या। पुनः प्रयास करें।");
-          resolve();
-        };
-        document.body.appendChild(scriptTag);
-      });
-    }
-
-    function requestToken() {
-      tokenClient.requestAccessToken({ prompt: "select_account" });
-    }
-
-    function logout() {
-      if (accessToken) {
-        google.accounts.oauth2.revoke(accessToken, () => {});
-      }
-      localStorage.removeItem("fit_token");
-      localStorage.removeItem("fit_email");
-      accessToken = null;
-      userEmail = null;
-      adsWatched = 0;
-
-      document.getElementById("authSection").style.display = "block";
-      document.getElementById("appSection").style.display = "none";
-      document.getElementById("statusAlertSection").style.display = "none";
-      document.getElementById("syncSection").style.display = "none";
-      document.getElementById("adCounter").innerText = "देखे गए ऐड्स: 0 / 5";
-      document.getElementById("syncBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (0/5)";
-      document.getElementById("syncBtn").disabled = false;
-      document.getElementById("statusLog").textContent = "तैयार... कृपया लॉगिन करें।";
-    }
-
-    function startSyncProcess() {
-      if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
-        window.AndroidBridge.showRewardedAd();
-      } else {
-        adRewardCompleted();
-      }
-    }
-
-    function adRewardCompleted() {
-      adsWatched++;
-      document.getElementById("adCounter").innerText = `देखे गए ऐड्स: ${adsWatched} / 5`;
-      document.getElementById("syncBtn").innerText = `ऐड्स देखें और सिंक शुरू करें (${adsWatched}/5)`;
-      log(`ऐड ${adsWatched}/5 पूरा देखा गया।`);
-
-      if (adsWatched >= 5) {
-        document.getElementById("syncBtn").disabled = true;
-        log("5 ऐड्स पूरे हुए! बैकग्राउंड स्टेप्स सिंक शुरू हो रहा है...");
-        runDeFitStyleSync();
-      }
-    }
-
-    async function getValidDataSource() {
-      const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta", {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        if (listData.dataSource && listData.dataSource.length > 0) {
-          return listData.dataSource[0].dataStreamId;
-        }
-      }
-
-      const createRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "dataStreamName": "DefaultStepCounter",
-          "type": "raw",
-          "application": { "name": "FitStepBoost" },
-          "dataType": {
-            "name": "com.google.step_count.delta",
-            "field": [{ "name": "steps", "format": "integer" }]
-          }
-        })
-      });
-
-      const createData = await createRes.json();
-      return createData.dataStreamId;
-    }
-
-    async function recordSyncLog(steps, status) {
-      try {
-        await fetch(SCRIPT_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: userEmail,
-            steps: steps,
-            status: status
-          })
-        });
-      } catch (e) {
-        console.error("लॉग रिकॉर्ड त्रुटि:", e);
-      }
-    }
-
-    async function runDeFitStyleSync() {
-      try {
-        log("डेटासोर्स कनेक्ट किया जा रहा है...");
-        const dataSourceId = await getValidDataSource();
-
-        const targetSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
-        const totalMinutes = Math.floor(targetSteps / 95);
-
-        const nowMs = Date.now();
-        const startSessionMs = nowMs - (totalMinutes * 60 * 1000);
-
-        log(`सत्र: पिछले ${totalMinutes} मिनट (~2 घंटे) में स्वाभाविक वॉक का निर्माण...`);
-        log(`गति: 70 से 115 स्टेप्स प्रति मिनट`);
-
-        let points = [];
-        let accumulated = 0;
-
-        for (let i = 0; i < totalMinutes; i++) {
-          const mStart = startSessionMs + (i * 60 * 1000);
-          const mEnd = mStart + (60 * 1000);
-
-          let minSteps = Math.floor(Math.random() * (115 - 70 + 1)) + 70;
-
-          if (i === totalMinutes - 1) {
-            minSteps = Math.max(50, targetSteps - accumulated);
-          }
-          accumulated += minSteps;
-
-          const pStartNanos = (BigInt(mStart) * 1000000n).toString();
-          const pEndNanos = (BigInt(mEnd) * 1000000n).toString();
-
-          points.push({
-            "startTimeNanos": pStartNanos,
-            "endTimeNanos": pEndNanos,
-            "dataTypeName": "com.google.step_count.delta",
-            "value": [{ "intVal": minSteps }]
-          });
-
-          if (accumulated >= targetSteps) break;
-        }
-
-        const totalStartNanos = (BigInt(startSessionMs) * 1000000n).toString();
-        const totalEndNanos = (BigInt(nowMs) * 1000000n).toString();
-
-        log(`कुल सिंक स्टेप्स: ${accumulated}`);
-
-        const datasetRequestBody = {
-          "dataSourceId": dataSourceId,
-          "minStartTimeNs": totalStartNanos,
-          "maxEndTimeNs": totalEndNanos,
-          "point": points
-        };
-
-        const datasetId = `${totalStartNanos}-${totalEndNanos}`;
-        const apiUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodeURIComponent(dataSourceId)}/datasets/${datasetId}`;
-
-        const res = await fetch(apiUrl, {
-          method: "PATCH",
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(datasetRequestBody)
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          log("डेटासेट सिंक त्रुटि: " + JSON.stringify(err));
-          await recordSyncLog(accumulated, "Failed: " + JSON.stringify(err));
-          return;
-        }
-
-        const sessionId = "FitStep_Walk_" + startSessionMs;
-        const sessionPayload = {
-          "id": sessionId,
-          "name": "Brisk Walking",
-          "description": "Natural Outdoor Walking",
-          "startTimeMillis": startSessionMs,
-          "endTimeMillis": nowMs,
-          "activityType": 7,
-          "application": { "name": "FitStepBoost" }
-        };
-
-        await fetch(`https://www.googleapis.com/fitness/v1/users/me/sessions/${sessionId}`, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(sessionPayload)
-        });
-
-        log(`\n🎉 सफलता! ${accumulated} स्टेप्स प्राकृतिक वॉक सेशन के साथ सिंक हो गए हैं।`);
-        log("👉 अब आप ब्राउज़र बंद कर सकते हैं।");
-
-        await recordSyncLog(accumulated, "Success (Approved Sync)");
-
-      } catch (e) {
-        log("त्रुटि: " + e.message);
-        await recordSyncLog(0, "Error: " + e.message);
-      }
-    }
-  </script>
-</body>
-</html>
+        const payload = JSON.parse(atob(response.credential.split('.')[1]));
+        currentUser = payload.email;
+        document.getElementById("user-email-text").innerText = currentUser;
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("dashboard-section").classList.remove("hidden");
+        log
