@@ -22,8 +22,11 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.RequestConfiguration;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+
+import java.util.Collections;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -32,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private RewardedAd rewardedAd;
     private boolean isAdLoading = false;
     private static final String TARGET_URL = "https://fitstep-boost.github.io/fitstep/";
+    // AdMob Google Official Sample Rewarded Ad Unit ID
     private static final String AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -39,9 +43,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // AdMob इनिशियलाइज़ेशन
-        MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
+        // 1. AdMob SDK इनिशियलाइज़ करें
+        try {
+            MobileAds.initialize(this, initializationStatus -> {
+                runOnUiThread(this::loadRewardedAd);
+            });
+        } catch (Exception ignored) {}
 
+        // 2. WebView सेटअप
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -55,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // index.html के साथ तालमेल वाला JavaScript Interface
+        // JavaScript ब्रिज
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
@@ -66,6 +75,9 @@ public class MainActivity extends AppCompatActivity {
         } else {
             webView.restoreState(savedInstanceState);
         }
+
+        // पहले ऐड को तुरंत लोड करने का बैकअप कॉल
+        new Handler(Looper.getMainLooper()).postDelayed(this::loadRewardedAd, 1500);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -96,11 +108,12 @@ public class MainActivity extends AppCompatActivity {
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 rewardedAd = ad;
                 isAdLoading = false;
+
                 rewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
                     @Override
                     public void onAdDismissedFullScreenContent() {
                         rewardedAd = null;
-                        loadRewardedAd();
+                        loadRewardedAd(); // अगला ऐड पहले से लोड करके रखें
                     }
 
                     @Override
@@ -115,23 +128,27 @@ public class MainActivity extends AppCompatActivity {
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                 rewardedAd = null;
                 isAdLoading = false;
-                new Handler(Looper.getMainLooper()).postDelayed(() -> loadRewardedAd(), 4000);
+                // स्क्रीन पर साफ़ कारण दिखेगा अगर कोई एरर आए
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "ऐड लोड नहीं हुआ: " + loadAdError.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+                // 5 सेकंड बाद बैकग्राउंड में दोबारा प्रयास करें
+                new Handler(Looper.getMainLooper()).postDelayed(() -> loadRewardedAd(), 5000);
             }
         });
     }
 
     public class WebAppInterface {
-        // वही फंक्शन जो आपकी असली index.html कॉल कर रही है: window.AndroidBridge.showRewardedAd()
         @JavascriptInterface
         public void showRewardedAd() {
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (rewardedAd != null) {
                     rewardedAd.show(MainActivity.this, rewardItem -> {
-                        // आपकी असली HTML का रिवॉर्ड फ़ंक्शन कॉल करना
+                        // यूजर ने पूरा ऐड देख लिया
                         webView.evaluateJavascript("if(window.adRewardCompleted) { window.adRewardCompleted(); }", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, 2-3 सेकंड बाद पुनः दबाएँ...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "ऐड तैयार किया जा रहा है, 2 सेकंड प्रतीक्षा करें...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
