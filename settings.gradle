@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "FitStepBoost"
+rootProject.name = "FitStep Boost"
 include ':app'
