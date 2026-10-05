@@ -75,10 +75,6 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-login {
-      background-color: #0284c7;
-      color: #ffffff;
-    }
     .btn-ad {
       background-color: #0284c7;
       color: #ffffff;
@@ -118,6 +114,12 @@
       color: #cbd5e1;
       margin-top: 15px;
     }
+    #google-btn-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+      min-height: 44px;
+    }
     .hidden {
       display: none;
     }
@@ -131,7 +133,7 @@
 
     <!-- Login Section -->
     <div id="login-section">
-      <button class="btn btn-login" onclick="triggerGoogleLogin()">Google Fit से कनेक्ट करें</button>
+      <div id="google-btn-container"></div>
     </div>
 
     <!-- Dashboard Section -->
@@ -164,20 +166,30 @@
       }
     }
 
-    // वही मूल और सफल Google Sign-In फंक्शन
-    function triggerGoogleLogin() {
-      log("लॉगिन विंडो खोली जा रही है...");
+    // Google Sign-In को सीधा बटन पर माउंट करना
+    function initGoogleSignIn() {
       if (window.google && google.accounts && google.accounts.id) {
         google.accounts.id.initialize({
           client_id: CLIENT_ID,
-          callback: handleCredentialResponse,
-          auto_select: true
+          callback: handleCredentialResponse
         });
-        google.accounts.id.prompt();
+
+        const btnContainer = document.getElementById("google-btn-container");
+        google.accounts.id.renderButton(btnContainer, {
+          theme: "filled_blue",
+          size: "large",
+          width: 320,
+          text: "continue_with",
+          shape: "rectangular"
+        });
       } else {
-        log("Google SDK लोड हो रहा है, 1 सेकंड बाद पुनः दबाएँ...");
+        setTimeout(initGoogleSignIn, 300);
       }
     }
+
+    window.onload = function() {
+      initGoogleSignIn();
+    };
 
     function handleCredentialResponse(response) {
       try {
@@ -201,10 +213,10 @@
       updateUI();
       document.getElementById("dashboard-section").classList.add("hidden");
       document.getElementById("login-section").classList.remove("hidden");
+      initGoogleSignIn();
       log("लॉगआउट सफल।");
     }
 
-    // AdMob ऐड चलाने का फंक्शन
     function watchAd() {
       const btn = document.getElementById("ad-btn");
       btn.disabled = true;
@@ -221,7 +233,6 @@
       }
     }
 
-    // Android द्वारा वीडियो पूरा होने पर यह कॉलबैक चलेगा
     window.onAdWatched = function() {
       adsWatched++;
       log("✅ ऐड " + adsWatched + "/" + TOTAL_ADS + " पूरा देखा गया।");
