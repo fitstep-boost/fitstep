@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FitStep Boost</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -116,6 +116,7 @@
       font-size: 12px;
       line-height: 1.6;
       color: #cbd5e1;
+      margin-top: 15px;
     }
     .hidden {
       display: none;
@@ -136,7 +137,7 @@
     <!-- Dashboard Section -->
     <div id="dashboard-section" class="hidden">
       <div class="user-box">
-        <div class="user-label">लॉगिन अकाउंट</div>
+        <div class="user-label">सत्यापित अकाउंट</div>
         <div id="user-email-text" class="user-email">--</div>
         <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
@@ -145,7 +146,7 @@
       <div id="counter-text" class="counter">देखे गए ऐड्स: 0 / 5</div>
     </div>
 
-    <!-- Console Log -->
+    <!-- Console Log Box -->
     <div id="log-box" class="log-box">तैयार... कृपया लॉगिन करें।</div>
   </div>
 
@@ -153,6 +154,7 @@
     let adsWatched = 0;
     const TOTAL_ADS = 5;
     let currentUser = null;
+    const CLIENT_ID = "883838274712-42qge0o8g6718d7jef4b1l4c88r04e9o.apps.googleusercontent.com";
 
     function log(msg) {
       const box = document.getElementById("log-box");
@@ -162,18 +164,54 @@
       }
     }
 
-    // Google Sign-In Initializer (वही असली काम करने वाला कोड)
-    function triggerGoogleLogin() {
-      log("लॉगिन विंडो खोली जा रही है...");
+    function setupGSI() {
       if (window.google && google.accounts && google.accounts.id) {
         google.accounts.id.initialize({
-          client_id: "883838274712-42qge0o8g6718d7jef4b1l4c88r04e9o.apps.googleusercontent.com",
+          client_id: CLIENT_ID,
           callback: handleCredentialResponse,
-          auto_select: true
+          auto_select: false,
+          cancel_on_tap_outside: false
         });
-        google.accounts.id.prompt();
+      }
+    }
+
+    window.onload = function() {
+      setupGSI();
+      // यदि URL हैश में id_token या credential आया हो
+      checkHashToken();
+    };
+
+    function triggerGoogleLogin() {
+      log("लॉगिन विंडो खोली जा रही है...");
+      setupGSI();
+
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // यदि prompt() बैकग्राउंड में रुक जाए, तो सीधा ऑथ विंडो खोलें
+            openDirectAuth();
+          }
+        });
       } else {
-        log("Google SDK लोड हो रहा है, कृपया 1 सेकंड बाद पुनः दबाएँ...");
+        openDirectAuth();
+      }
+    }
+
+    function openDirectAuth() {
+      log("सीधा ऑथेंटिकेशन खोला जा रहा है...");
+      const redirectUri = window.location.origin + window.location.pathname;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=openid%20email%20profile&nonce=${Date.now()}`;
+      window.location.href = authUrl;
+    }
+
+    function checkHashToken() {
+      if (window.location.hash) {
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const idToken = params.get('id_token');
+        if (idToken) {
+          handleCredentialResponse({ credential: idToken });
+          window.history.replaceState(null, null, ' ');
+        }
       }
     }
 
@@ -202,28 +240,24 @@
       log("लॉगआउट सफल।");
     }
 
-    // ऐड्स देखने का फंक्शन
     function watchAd() {
       const btn = document.getElementById("ad-btn");
       btn.disabled = true;
       log("ऐड लोड किया जा रहा है...");
 
-      // Android ऐप का असली AdMob वीडियो ऐड कॉल करना
       if (window.AndroidBridge && window.AndroidBridge.showAd) {
         window.AndroidBridge.showAd();
         setTimeout(() => { btn.disabled = false; }, 4000);
       } else {
-        // टेस्ट मोड (अगर साधारण ब्राउज़र में खुला हो)
         setTimeout(() => {
           onAdWatched();
         }, 1500);
       }
     }
 
-    // AdMob द्वारा वीडियो पूरा होने पर कॉलबैक
     window.onAdWatched = function() {
       adsWatched++;
-      log("ऐड " + adsWatched + "/" + TOTAL_ADS + " पूरा देखा गया।");
+      log("✅ ऐड " + adsWatched + "/" + TOTAL_ADS + " पूरा देखा गया।");
       updateUI();
 
       if (adsWatched >= TOTAL_ADS) {
