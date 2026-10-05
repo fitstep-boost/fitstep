@@ -23,7 +23,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // बिना किसी XML लेआउट के सीधे फुल-स्क्रीन WebView तैयार करना
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -35,13 +34,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setSupportMultipleWindows(true);
+        settings.setSupportMultipleWindows(false); // पॉपअप अटकने की समस्या को रोकता है
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
-
-        // Google Sign-In Error 400 रोकने के लिए Chrome User-Agent सेट करना
-        String defaultUserAgent = settings.getUserAgentString();
-        String chromeUserAgent = defaultUserAgent.replace("; wv", "");
-        settings.setUserAgentString(chromeUserAgent);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -51,10 +45,23 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("https://accounts.google.com/") || 
-                    url.startsWith("https://fitstep-boost.github.io/")) {
+                // अगर यूज़र Google लॉगिन या किसी ऑथेंटिकेशन लिंक पर जाता है, तो उसे फ़ोन के असली ब्राउज़र में खोलें
+                if (url.contains("accounts.google.com") || url.contains("oauth")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(intent);
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }
+
+                // मुख्य साइट के पेजों को सीधे ऐप के अंदर चलने दें
+                if (url.startsWith("https://fitstep-boost.github.io/")) {
                     return false;
                 }
+
+                // बाकी बाहरी लिंक सिस्टम ब्राउज़र में खुलेंगे
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
