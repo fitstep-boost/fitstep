@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -21,9 +22,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        webView = findViewById(R.id.webview);
+        // बिना किसी XML लेआउट के सीधे फुल-स्क्रीन WebView तैयार करना
+        webView = new WebView(this);
+        webView.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        setContentView(webView);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -32,7 +38,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
 
-        // Google Sign-In को WebView ब्लॉक करने से रोकने के लिए Chrome User-Agent सेट करना
+        // Google Sign-In Error 400 रोकने के लिए Chrome User-Agent सेट करना
         String defaultUserAgent = settings.getUserAgentString();
         String chromeUserAgent = defaultUserAgent.replace("; wv", "");
         settings.setUserAgentString(chromeUserAgent);
@@ -45,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // अगर बाहरी ऑथेंटिकेशन या रीडायरेक्ट लिंक है तो उसे ब्राउज़र के अनुकूल चलने दें
                 if (url.startsWith("https://accounts.google.com/") || 
                     url.startsWith("https://fitstep-boost.github.io/")) {
                     return false;
