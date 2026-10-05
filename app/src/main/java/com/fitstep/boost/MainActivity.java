@@ -29,7 +29,6 @@ public class MainActivity extends AppCompatActivity {
     private WebView popupWebView;
     private RewardedAd rewardedAd;
     private static final String TARGET_URL = "https://fitstep-boost.github.io/fitstep/";
-    // AdMob Official Test Rewarded Ad Unit ID
     private static final String AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -37,10 +36,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 1. Google Mobile Ads SDK शुरू करें
         MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
 
-        // 2. WebView तैयार करें
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -54,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // वेबसाइट और ऐप को जोड़ने वाला ब्रिज
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
@@ -93,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onAdDismissedFullScreenContent() {
                         rewardedAd = null;
-                        loadRewardedAd(); // अगला ऐड लोड करें
+                        loadRewardedAd();
                     }
 
                     @Override
@@ -117,11 +113,10 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 if (rewardedAd != null) {
                     rewardedAd.show(MainActivity.this, rewardItem -> {
-                        // जब यूज़र पूरा ऐड देख ले तब वेबसाइट को सूचित करें
                         webView.evaluateJavascript("if(window.onAdWatched) { window.onAdWatched(); }", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, कृपया 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
