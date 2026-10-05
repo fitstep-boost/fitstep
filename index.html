@@ -146,29 +146,30 @@
         const now = Date.now();
         const oneHourAgo = now - (60 * 60 * 1000);
         
-        const startTimeNanos = BigInt(oneHourAgo) * 1000000n;
-        const endTimeNanos = BigInt(now) * 1000000n;
-
-        const startStr = startTimeNanos.toString();
-        const endStr = endTimeNanos.toString();
+        // Google Fit API के लिए सटीक नैनोसेकंड्स (नंबर फॉर्मेट)
+        const startNanos = oneHourAgo * 1000000;
+        const endNanos = now * 1000000;
 
         log(`कुल सिंक होने वाले स्टेप्स: ${totalSteps}`);
 
         const requestBody = {
           "dataSourceId": dataSourceId,
-          "maxEndTimeNs": endStr,
-          "minStartTimeNs": startStr,
+          "minStartTimeNs": startNanos,
+          "maxEndTimeNs": endNanos,
           "point": [
             {
-              "startTimeNanos": startStr,
-              "endTimeNanos": endStr,
+              "startTimeNanos": startNanos,
+              "endTimeNanos": endNanos,
               "dataTypeName": "com.google.step_count.delta",
               "value": [{ "intVal": totalSteps }]
             }
           ]
         };
 
-        const res = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${startStr}-${endStr}`, {
+        const datasetId = `${startNanos}-${endNanos}`;
+        const apiUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${datasetId}`;
+
+        const res = await fetch(apiUrl, {
           method: "PATCH",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
