@@ -120,32 +120,32 @@
         }
       };
 
-      const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(dsPayload)
-      });
+      try {
+        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(dsPayload)
+        });
 
-      if (res.status === 409 || !res.ok) {
-        return "raw:com.google.step_count.delta:198753021000:FitStepBoostSteps";
+        const data = await res.json();
+        return data.dataStreamId || "raw:com.google.step_count.delta:198753021000:FitStepBoost:FitStepBoostSteps";
+      } catch (e) {
+        return "raw:com.google.step_count.delta:198753021000:FitStepBoost:FitStepBoostSteps";
       }
-      const data = await res.json();
-      return data.dataStreamId || "raw:com.google.step_count.delta:198753021000:FitStepBoostSteps";
     }
 
     async function runStepInjection() {
       try {
-        log("डेटासोर्स चेक किया जा रहा है...");
+        log("डेटासोर्स तैयार किया जा रहा है...");
         const dataSourceId = await ensureDataSource();
 
         const totalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
         const now = Date.now();
         const oneHourAgo = now - (60 * 60 * 1000);
         
-        // BigInt नैनोसेकंड्स स्ट्रिंग ताकि संख्या में कोई गड़बड़ी न हो
         const startTimeNanos = BigInt(oneHourAgo) * 1000000n;
         const endTimeNanos = BigInt(now) * 1000000n;
 
@@ -156,8 +156,8 @@
 
         const requestBody = {
           "dataSourceId": dataSourceId,
-          "maxEndTimeNanos": endStr,
-          "minStartTimeNanos": startStr,
+          "maxEndTimeNs": endStr,
+          "minStartTimeNs": startStr,
           "point": [
             {
               "startTimeNanos": startStr,
@@ -168,10 +168,7 @@
           ]
         };
 
-        // URL में encodeURIComponent हटा दिया गया है ताकि कोलन सुरक्षित रहे
-        const apiUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${startStr}-${endStr}`;
-
-        const res = await fetch(apiUrl, {
+        const res = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${startStr}-${endStr}`, {
           method: "PATCH",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
