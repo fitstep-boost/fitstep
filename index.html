@@ -59,7 +59,7 @@
   <script>
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid";
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbynl0lWXX1dWvL2PjNCxoKgwFXVYxiVMUcyUY0QD-2Jxk-Yx36csBhvGM0iOmR6hsOK5g/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPc_Vb9uVoHeU21RPIvJVoC4zN924ZaNWKJfn3SDEil7QkqZxTjCnhrDfvIgK61zkVLg/exec";
 
     let tokenClient;
     let accessToken = localStorage.getItem("fit_token") || null;
@@ -111,7 +111,6 @@
           
           await verifyAccessWithSheet(userEmail);
         } else {
-          // अगर टोकन एक्सपायर हो गया हो
           logout();
         }
       } catch (e) {
@@ -119,7 +118,6 @@
       }
     }
 
-    // JSONP के ज़रिये Google Apps Script से सीधा स्टेटस मँगाना (No CORS Error)
     function verifyAccessWithSheet(email) {
       log("एडमिन अनुमति (Whitelist) चेक की जा रही है...");
       
@@ -144,15 +142,15 @@
             alertSection.style.display = "block";
             syncSec.style.display = "none";
             alertTitle.innerText = "⏳ एक्सेस पेंडिंग (Pending)";
-            alertMsg.innerText = "आपकी ईमेल एडमिन के पास पहुँच गई है। एडमिन द्वारा 'Approved' करते ही सिंक अनलॉक हो जाएगा।";
-            log("⏳ आपकी आईडी Google Sheet में 'Pending' के रूप में दर्ज हो चुकी है। एडमिन की स्वीकृति का इंतज़ार करें।");
+            alertMsg.innerText = "आपकी रिक्वेस्ट एडमिन के पास पहुँच गई है। एडमिन द्वारा 'Approved' करते ही सिंक अनलॉक हो जाएगा।";
+            log("⏳ ईमेल Google Sheet में दर्ज हो चुका है (Status: Pending)। एडमिन की अनुमति का इंतज़ार करें।");
           } else {
             alertSection.className = "alert-card alert-denied";
             alertSection.style.display = "block";
             syncSec.style.display = "none";
             alertTitle.innerText = "🔒 एक्सेस अस्वीकृत (Blocked)";
             alertMsg.innerText = "यह अकाउंट ब्लॉक या अनधिकृत है। कृपया एडमिन से संपर्क करें।";
-            log("❌ एक्सेस अस्वीकृत: अकाउंट स्वीकृत नहीं है।");
+            log("❌ एक्सेस अस्वीकृत: " + (result.status || "Not Allowed"));
           }
           resolve();
         };
