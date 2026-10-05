@@ -14,7 +14,7 @@
     .btn { background: #0284c7; color: white; border: none; padding: 14px 20px; border-radius: 10px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 16px; transition: background 0.2s; }
     .btn:hover { background: #0369a1; }
     .btn:disabled { background: #475569; cursor: not-allowed; }
-    .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 140px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 130px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
     .counter { font-size: 15px; font-weight: 600; color: #38bdf8; margin-top: 14px; }
   </style>
 </head>
@@ -22,7 +22,7 @@
 
   <div class="card">
     <h1>FitStep Boost</h1>
-    <p>Google Fit स्टेप्स ऑटोमेशन और सिंक टूल</p>
+    <p>Google Fit स्टेप्स ऑटोमेशन (DeFit स्मार्ट सिंक)</p>
 
     <div id="authSection">
       <button class="btn" id="loginBtn" onclick="requestToken()">Google Fit से कनेक्ट करें</button>
@@ -99,8 +99,8 @@
 
       if (adsWatched >= 5) {
         document.getElementById("syncBtn").disabled = true;
-        log("5 ऐड्स पूरे हुए! बैकग्राउंड स्टेप्स सिंक शुरू हो रहा है...");
-        runStepInjection();
+        log("5 ऐड्स पूरे हुए! स्मार्ट बैकग्राउंड डिस्ट्रीब्यूशन शुरू...");
+        runDeFitStyleSync();
       }
     }
 
@@ -137,55 +137,58 @@
       return createData.dataStreamId;
     }
 
-    async function runStepInjection() {
+    async function runDeFitStyleSync() {
       try {
         log("डेटासोर्स कनेक्ट किया जा रहा है...");
         const dataSourceId = await getValidDataSource();
 
-        // 11,000 से 13,000 के बीच कुल स्टेप्स
-        const targetTotalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
+        // 11,200 से 12,500 के बीच कुल स्टेप्स
+        const targetSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
         
-        // 1 मिनट में औसतन 98-102 स्टेप्स की गति के अनुसार कुल मिनट तय करना (लगभग 110 से 125 मिनट)
-        const totalMinutes = Math.floor(targetTotalSteps / 100); 
+        // 1 मिनट में औसतन 95 स्टेप्स की गति => लगभग 115 से 125 मिनट की अवधि
+        const totalMinutes = Math.floor(targetSteps / 95);
 
         const nowMs = Date.now();
         const startSessionMs = nowMs - (totalMinutes * 60 * 1000);
 
+        log(`सत्र: पिछले ${totalMinutes} मिनट (~2 घंटे) में स्वाभाविक वॉक का निर्माण...`);
+        log(`गति: 70 से 115 स्टेप्स प्रति मिनट (प्राकृतिक वेरिएशन)`);
+
         let points = [];
-        let accumulatedSteps = 0;
+        let accumulated = 0;
 
         for (let i = 0; i < totalMinutes; i++) {
-          const mStartMs = startSessionMs + (i * 60 * 1000);
-          const mEndMs = mStartMs + (60 * 1000);
+          const mStart = startSessionMs + (i * 60 * 1000);
+          const mEnd = mStart + (60 * 1000);
 
-          // हर 1 मिनट में 92 से 108 के बीच रैंडम नेचुरल स्टेप्स
-          let minuteSteps = Math.floor(Math.random() * (108 - 92 + 1)) + 92;
+          // रैंडम नेचुरल स्टेप्स: कभी 70, कभी 88, कभी 102, कभी 114
+          let minSteps = Math.floor(Math.random() * (115 - 70 + 1)) + 70;
 
-          // आख़िरी मिनट में बाकी बचे स्टेप्स को एडजस्ट करें
           if (i === totalMinutes - 1) {
-            minuteSteps = targetTotalSteps - accumulatedSteps;
+            minSteps = Math.max(50, targetSteps - accumulated);
           }
-          accumulatedSteps += minuteSteps;
+          accumulated += minSteps;
 
-          const pStartNanos = (BigInt(mStartMs) * 1000000n).toString();
-          const pEndNanos = (BigInt(mEndMs) * 1000000n).toString();
+          const pStartNanos = (BigInt(mStart) * 1000000n).toString();
+          const pEndNanos = (BigInt(mEnd) * 1000000n).toString();
 
           points.push({
             "startTimeNanos": pStartNanos,
             "endTimeNanos": pEndNanos,
             "dataTypeName": "com.google.step_count.delta",
-            "value": [{ "intVal": minuteSteps }]
+            "value": [{ "intVal": minSteps }]
           });
+
+          if (accumulated >= targetSteps) break;
         }
 
         const totalStartNanos = (BigInt(startSessionMs) * 1000000n).toString();
         const totalEndNanos = (BigInt(nowMs) * 1000000n).toString();
 
-        log(`सत्र अवधि: पिछले ${totalMinutes} मिनट में विभाजित।`);
-        log(`औसत गति: ~100 स्टेप्स/मिनट (स्वाभाविक चाल)`);
-        log(`कुल सिंक होने वाले स्टेप्स: ${accumulatedSteps}`);
+        log(`कुल सिंक स्टेप्स: ${accumulated}`);
 
-        const requestBody = {
+        // 1. स्टेप्स डेटासेट पैच करें
+        const datasetRequestBody = {
           "dataSourceId": dataSourceId,
           "minStartTimeNs": totalStartNanos,
           "maxEndTimeNs": totalEndNanos,
@@ -201,15 +204,41 @@
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(datasetRequestBody)
         });
 
-        if (res.ok) {
-          log(`\n🎉 सफलता! ${accumulatedSteps} स्टेप्स पिछले ${totalMinutes} मिनटों में मिनट-दर-मिनट स्वाभाविक रूप से सिंक हो चुके हैं।`);
-        } else {
+        if (!res.ok) {
           const err = await res.json();
-          log("सिंक त्रुटि: " + JSON.stringify(err));
+          log("डेटासेट सिंक त्रुटि: " + JSON.stringify(err));
+          return;
         }
+
+        // 2. Google Fit Sessions API में "Walking Session" रजिस्टर करें (DeFit की तरह)
+        const sessionId = "FitStep_Walk_" + startSessionMs;
+        const sessionPayload = {
+          "id": sessionId,
+          "name": "Brisk Walking",
+          "description": "Natural Outdoor Walking",
+          "startTimeMillis": startSessionMs,
+          "endTimeMillis": nowMs,
+          "activityType": 7, // 7 = Walking
+          "application": {
+            "name": "FitStepBoost"
+          }
+        };
+
+        await fetch(`https://www.googleapis.com/fitness/v1/users/me/sessions/${sessionId}`, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(sessionPayload)
+        });
+
+        log(`\n🎉 सफलता! ${accumulated} स्टेप्स पिछले ${totalMinutes} मिनटों में 1-1 मिनट के अंतराल में प्राकृतिक वॉक सेशन के साथ सिंक हो गए हैं।`);
+        log("👉 अब आप ब्राउज़र बंद कर सकते हैं।");
+
       } catch (e) {
         log("त्रुटि: " + e.message);
       }
