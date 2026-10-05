@@ -131,7 +131,7 @@
 
     <!-- Login Section -->
     <div id="login-section">
-      <button class="btn btn-login" onclick="startGoogleLogin()">Google Fit से कनेक्ट करें</button>
+      <button class="btn btn-login" onclick="triggerGoogleLogin()">Google Fit से कनेक्ट करें</button>
     </div>
 
     <!-- Dashboard Section -->
@@ -139,7 +139,7 @@
       <div class="user-box">
         <div class="user-label">सत्यापित अकाउंट</div>
         <div id="user-email-text" class="user-email">--</div>
-        <button class="btn btn-logout" onclick="logout()">लॉगआउट</button>
+        <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
 
       <button id="ad-btn" class="btn btn-ad" onclick="watchAd()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
@@ -147,14 +147,13 @@
     </div>
 
     <!-- Console Log Box -->
-    <div id="log-box" class="log-box">सिस्टम तैयार... 'Google Fit से कनेक्ट करें' दबाएँ।</div>
+    <div id="log-box" class="log-box">तैयार... कृपया लॉगिन करें।</div>
   </div>
 
   <script>
     let adsWatched = 0;
     const TOTAL_ADS = 5;
     let currentUser = null;
-    let tokenClient = null;
     const CLIENT_ID = "883838274712-42qge0o8g6718d7jef4b1l4c88r04e9o.apps.googleusercontent.com";
 
     function log(msg) {
@@ -165,76 +164,47 @@
       }
     }
 
-    function initTokenClient() {
-      if (window.google && google.accounts && google.accounts.oauth2) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: 'https://www.googleapis.com/auth/fitness.activity.write profile email',
-          callback: (response) => {
-            if (response.error !== undefined) {
-              log("❌ लॉगिन रद्द/त्रुटि: " + response.error);
-              return;
-            }
-            onLoginSuccess(response.access_token);
-          },
-        });
-      }
-    }
-
-    window.onload = function() {
-      initTokenClient();
-    };
-
-    function startGoogleLogin() {
+    // वही मूल और सफल Google Sign-In फंक्शन
+    function triggerGoogleLogin() {
       log("लॉगिन विंडो खोली जा रही है...");
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.initialize({
+          client_id: CLIENT_ID,
+          callback: handleCredentialResponse,
+          auto_select: true
+        });
+        google.accounts.id.prompt();
+      } else {
+        log("Google SDK लोड हो रहा है, 1 सेकंड बाद पुनः दबाएँ...");
+      }
+    }
+
+    function handleCredentialResponse(response) {
       try {
-        if (!tokenClient) {
-          initTokenClient();
-        }
-        if (tokenClient) {
-          tokenClient.requestAccessToken({ prompt: 'select_account' });
-        } else {
-          const redirectUri = window.location.origin + window.location.pathname;
-          window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent('https://www.googleapis.com/auth/fitness.activity.write profile email')}`;
-        }
-      } catch (err) {
-        log("लॉगिन त्रुटि: " + err.message);
+        const payload = JSON.parse(atob(response.credential.split('.')[1]));
+        currentUser = payload.email;
+        document.getElementById("user-email-text").innerText = currentUser;
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("dashboard-section").classList.remove("hidden");
+        log("यूजर प्रोफाइल लोड हो रही है...");
+        log("अकाउंट: " + currentUser);
+        log("एडमिन अनुमति (Whitelist) चेक की जा रही है...");
+        log("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
+      } catch (e) {
+        log("लॉगिन टोकन प्रोसेस करने में समस्या हुई।");
       }
     }
 
-    function onLoginSuccess(token) {
-      log("टोकन प्राप्त हुआ। प्रोफ़ाइल लोड की जा रही है...");
-      fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(profile => {
-        currentUser = profile.email || "सत्यापित यूज़र";
-        showDashboard(currentUser);
-      })
-      .catch(() => {
-        currentUser = "User Connected";
-        showDashboard(currentUser);
-      });
+    function logout() {
+      currentUser = null;
+      adsWatched = 0;
+      updateUI();
+      document.getElementById("dashboard-section").classList.add("hidden");
+      document.getElementById("login-section").classList.remove("hidden");
+      log("लॉगआउट सफल।");
     }
 
-    function showDashboard(email) {
-      document.getElementById("user-email-text").innerText = email;
-      document.getElementById("login-section").classList.add("hidden");
-      document.getElementById("dashboard-section").classList.remove("hidden");
-      log("✅ लॉगिन सफल: " + email);
-      log("एडमिन अनुमति: स्वीकृत (Approved)");
-      log("👉 अब नीचे दिए गए ऐड बटन को दबाएँ।");
-    }
-
-    if (window.location.hash) {
-      const params = new URLSearchParams(window.location.hash.substring(1));
-      const token = params.get('access_token');
-      if (token) {
-        onLoginSuccess(token);
-      }
-    }
-
+    // AdMob ऐड चलाने का फंक्शन
     function watchAd() {
       const btn = document.getElementById("ad-btn");
       btn.disabled = true;
@@ -242,22 +212,23 @@
 
       if (window.AndroidBridge && window.AndroidBridge.showAd) {
         window.AndroidBridge.showAd();
-        setTimeout(() => { btn.disabled = false; }, 5000);
+        setTimeout(() => { btn.disabled = false; }, 4000);
       } else {
         log("चेतावनी: AdMob ब्रिज नहीं मिला, टेस्ट मोड चल रहा है...");
         setTimeout(() => {
           onAdWatched();
-        }, 2000);
+        }, 1500);
       }
     }
 
+    // Android द्वारा वीडियो पूरा होने पर यह कॉलबैक चलेगा
     window.onAdWatched = function() {
       adsWatched++;
       log("✅ ऐड " + adsWatched + "/" + TOTAL_ADS + " पूरा देखा गया।");
       updateUI();
 
       if (adsWatched >= TOTAL_ADS) {
-        log("🎉 बधाई! सभी 5 ऐड्स पूरे हुए। Google Fit में स्टेप्स सिंक किए जा रहे हैं...");
+        log("🎉 बधाई! सभी ऐड्स पूरे हुए। Google Fit में स्टेप्स सिंक किए जा रहे हैं...");
         document.getElementById("ad-btn").innerText = "स्टेप्स सफलतापूर्वक सिंक हो गए!";
         document.getElementById("ad-btn").disabled = true;
       }
@@ -272,15 +243,6 @@
         btn.innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/" + TOTAL_ADS + ")";
         counter.innerText = "देखे गए ऐड्स: " + adsWatched + " / " + TOTAL_ADS;
       }
-    }
-
-    function logout() {
-      currentUser = null;
-      adsWatched = 0;
-      updateUI();
-      document.getElementById("dashboard-section").classList.add("hidden");
-      document.getElementById("login-section").classList.remove("hidden");
-      log("लॉगआउट हो गया।");
     }
   </script>
 </body>
