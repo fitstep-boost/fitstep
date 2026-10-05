@@ -2,6 +2,8 @@ package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -28,7 +30,9 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private WebView popupWebView;
     private RewardedAd rewardedAd;
+    private boolean isAdLoading = false;
     private static final String TARGET_URL = "https://fitstep-boost.github.io/fitstep/";
+    // AdMob टेस्ट Rewarded Ad ID
     private static final String AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -36,12 +40,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 1. AdMob शुरू करना
-        try {
-            MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
-        } catch (Exception ignored) {}
+        // AdMob इनिशियलाइज़ेशन
+        MobileAds.initialize(this, initializationStatus -> {
+            loadRewardedAd();
+        });
 
-        // 2. मुख्य WebView (वही लेआउट जिसने लॉगिन कराया था)
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -55,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // AdMob के लिए जावास्क्रिप्ट ब्रिज
+        // JavaScript ब्रिज (AndroidBridge)
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
@@ -85,11 +88,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadRewardedAd() {
+        if (isAdLoading || rewardedAd != null) {
+            return;
+        }
+        isAdLoading = true;
+
         AdRequest adRequest = new AdRequest.Builder().build();
         RewardedAd.load(this, AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 rewardedAd = ad;
+                isAdLoading = false;
                 rewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
                     @Override
                     public void onAdDismissedFullScreenContent() {
@@ -108,6 +117,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                 rewardedAd = null;
+                isAdLoading = false;
+                new Handler(Looper.getMainLooper()).postDelayed(() -> loadRewardedAd(), 4000);
             }
         });
     }
@@ -115,13 +126,13 @@ public class MainActivity extends AppCompatActivity {
     public class WebAppInterface {
         @JavascriptInterface
         public void showAd() {
-            runOnUiThread(() -> {
+            new Handler(Looper.getMainLooper()).post(() -> {
                 if (rewardedAd != null) {
                     rewardedAd.show(MainActivity.this, rewardItem -> {
                         webView.evaluateJavascript("if(window.onAdWatched) { window.onAdWatched(); }", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, कृपया 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, कृपया 3 सेकंड बाद पुनः दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
@@ -139,7 +150,6 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
-        // बिल्कुल वही User-Agent जिससे Google Auth पास हुआ था
         String chromeAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36";
         settings.setUserAgentString(chromeAgent);
     }
