@@ -1,8 +1,7 @@
 package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
-import android.content.Intent;
-import android.net.Uri;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -34,8 +33,14 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setSupportMultipleWindows(false); // पॉपअप अटकने की समस्या को रोकता है
+        settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+
+        // Google GSI और OAuth के लिए मानक मोबाइल Chrome एजेंट
+        String chromeAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+        settings.setUserAgentString(chromeAgent);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -45,30 +50,14 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // अगर यूज़र Google लॉगिन या किसी ऑथेंटिकेशन लिंक पर जाता है, तो उसे फ़ोन के असली ब्राउज़र में खोलें
-                if (url.contains("accounts.google.com") || url.contains("oauth")) {
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                        startActivity(intent);
-                        return true;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }
+                // पूरा लॉगिन और टोकन प्रोसेस ऐप के अंदर ही रहेगा
+                view.loadUrl(url);
+                return true;
+            }
 
-                // मुख्य साइट के पेजों को सीधे ऐप के अंदर चलने दें
-                if (url.startsWith("https://fitstep-boost.github.io/")) {
-                    return false;
-                }
-
-                // बाकी बाहरी लिंक सिस्टम ब्राउज़र में खुलेंगे
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                    startActivity(intent);
-                    return true;
-                } catch (Exception e) {
-                    return false;
-                }
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
             }
         });
 
