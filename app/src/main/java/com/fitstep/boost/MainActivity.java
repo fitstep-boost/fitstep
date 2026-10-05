@@ -32,7 +32,6 @@ public class MainActivity extends AppCompatActivity {
     private RewardedAd rewardedAd;
     private boolean isAdLoading = false;
     private static final String TARGET_URL = "https://fitstep-boost.github.io/fitstep/";
-    // AdMob टेस्ट Rewarded Ad ID
     private static final String AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -41,9 +40,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         // AdMob इनिशियलाइज़ेशन
-        MobileAds.initialize(this, initializationStatus -> {
-            loadRewardedAd();
-        });
+        MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
 
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(
@@ -58,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // JavaScript ब्रिज (AndroidBridge)
+        // index.html के साथ तालमेल वाला JavaScript Interface
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
@@ -124,15 +121,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class WebAppInterface {
+        // वही फंक्शन जो आपकी असली index.html कॉल कर रही है: window.AndroidBridge.showRewardedAd()
         @JavascriptInterface
-        public void showAd() {
+        public void showRewardedAd() {
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (rewardedAd != null) {
                     rewardedAd.show(MainActivity.this, rewardItem -> {
-                        webView.evaluateJavascript("if(window.onAdWatched) { window.onAdWatched(); }", null);
+                        // आपकी असली HTML का रिवॉर्ड फ़ंक्शन कॉल करना
+                        webView.evaluateJavascript("if(window.adRewardCompleted) { window.adRewardCompleted(); }", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, कृपया 3 सेकंड बाद पुनः दबाएँ...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "ऐड लोड हो रहा है, 2-3 सेकंड बाद पुनः दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
