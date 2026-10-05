@@ -104,31 +104,68 @@
       }
     }
 
-    async function runStepInjection() {
-      const totalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
-      const now = Date.now();
-      const oneHourAgo = now - (60 * 60 * 1000);
-      const startTimeNanos = oneHourAgo * 1000000;
-      const endTimeNanos = now * 1000000;
-
-      log(`कुल सिंक होने वाले स्टेप्स: ${totalSteps}`);
-
-      const requestBody = {
-        "dataSourceId": "raw:com.google.step_count.delta:198753021000:FitStepBoost",
-        "maxEndTimeNanos": endTimeNanos,
-        "minStartTimeNanos": startTimeNanos,
-        "point": [
-          {
-            "startTimeNanos": startTimeNanos,
-            "endTimeNanos": endTimeNanos,
-            "dataTypeName": "com.google.step_count.delta",
-            "value": [{ "intVal": totalSteps }]
-          }
-        ]
+    async function ensureDataSource() {
+      const dsPayload = {
+        "dataStreamName": "FitStepBoostSteps",
+        "type": "raw",
+        "application": {
+          "name": "FitStepBoost"
+        },
+        "dataType": {
+          "name": "com.google.step_count.delta",
+          "field": [{
+            "name": "steps",
+            "format": "integer"
+          }]
+        }
       };
 
+      const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(dsPayload)
+      });
+
+      if (res.status === 409) {
+        // डेटासोर्स पहले से बना हुआ है
+        return `raw:com.google.step_count.delta:198753021000:FitStepBoost`;
+      }
+      const data = await res.json();
+      return data.dataStreamId;
+    }
+
+    async function runStepInjection() {
       try {
-        const res = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/raw:com.google.step_count.delta:198753021000:FitStepBoost/datasets/${startTimeNanos}-${endTimeNanos}`, {
+        log("डेटासोर्स तैयार किया जा रहा है...");
+        const dataSourceId = await ensureDataSource();
+        log("डेटासोर्स आईडी: " + dataSourceId);
+
+        const totalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
+        const now = Date.now();
+        const oneHourAgo = now - (60 * 60 * 1000);
+        const startTimeNanos = oneHourAgo * 1000000;
+        const endTimeNanos = now * 1000000;
+
+        log(`कुल सिंक होने वाले स्टेप्स: ${totalSteps}`);
+
+        const requestBody = {
+          "dataSourceId": dataSourceId,
+          "maxEndTimeNanos": endTimeNanos,
+          "minStartTimeNanos": startTimeNanos,
+          "point": [
+            {
+              "startTimeNanos": startTimeNanos,
+              "endTimeNanos": endTimeNanos,
+              "dataTypeName": "com.google.step_count.delta",
+              "value": [{ "intVal": totalSteps }]
+            }
+          ]
+        };
+
+        const res = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodeURIComponent(dataSourceId)}/datasets/${startTimeNanos}-${endTimeNanos}`, {
           method: "PATCH",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -144,7 +181,7 @@
           log("सिंक त्रुटि: " + JSON.stringify(err));
         }
       } catch (e) {
-        log("नेटवर्क त्रुटि: " + e.message);
+        log("त्रुटि: " + e.message);
       }
     }
   </script>
