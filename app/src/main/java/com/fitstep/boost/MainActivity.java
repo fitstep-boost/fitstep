@@ -36,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // AdMob शुरू करना
         MobileAds.initialize(this, initializationStatus -> loadRewardedAd());
 
         webView = new WebView(this);
@@ -47,11 +48,12 @@ public class MainActivity extends AppCompatActivity {
 
         configureSettings(webView);
 
+        // वेबसाइट से ऐड चलाने के लिए ब्रिज
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
-
-        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new CustomWebChromeClient());
@@ -134,6 +136,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
+        // Google GSI ऑथेंटिकेशन को ठीक से खोलने वाला सही Chrome User-Agent
         String chromeAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36";
         settings.setUserAgentString(chromeAgent);
     }
