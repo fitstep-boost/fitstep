@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -15,10 +14,10 @@
     .btn { background: #0284c7; color: white; border: none; padding: 14px 20px; border-radius: 10px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 14px; transition: background 0.2s; }
     .btn:hover { background: #0369a1; }
     .btn:disabled { background: #475569; cursor: not-allowed; }
-    .btn-logout { background: #dc2626; padding: 8px 14px; font-size: 13px; border-radius: 8px; margin-top: 8px; width: auto; display: inline-block; }
-    .btn-logout:hover { background: #b91c1c; }
-    .user-badge { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 10px 14px; margin: 12px 0; text-align: left; }
-    .user-email { color: #38bdf8; font-weight: 600; font-size: 14px; word-break: break-all; }
+    .btn-logout { background: #ef4444; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; margin-top: 8px; }
+    .btn-logout:hover { background: #dc2626; }
+    .user-box { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; margin: 14px 0; text-align: center; }
+    .user-email { color: #38bdf8; font-weight: 600; font-size: 14px; word-break: break-all; margin-bottom: 4px; }
     .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 130px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
     .counter { font-size: 15px; font-weight: 600; color: #38bdf8; margin-top: 14px; }
   </style>
@@ -34,10 +33,10 @@
     </div>
 
     <div id="appSection" style="display: none;">
-      <div class="user-badge">
-        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">सक्रिय अकाउंट:</div>
-        <div class="user-email" id="displayEmail">लोड हो रहा है...</div>
-        <button class="btn btn-logout" onclick="logout()">साइन आउट (Logout)</button>
+      <div class="user-box">
+        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">लॉगिन अकाउंट</div>
+        <div class="user-email" id="displayEmail">सफलतापूर्वक लिंक हुआ</div>
+        <button class="btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
       
       <button class="btn" id="syncBtn" onclick="startSyncProcess()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
@@ -49,7 +48,7 @@
 
   <script>
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
-    const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write email profile openid";
+    const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid";
     
     let tokenClient;
     let accessToken = localStorage.getItem("fit_token") || null;
@@ -73,42 +72,39 @@
           }
           accessToken = resp.access_token;
           localStorage.setItem("fit_token", accessToken);
-          await fetchUserProfile();
+          await loadUserEmail();
         },
       });
 
       if (accessToken) {
-        if (userEmail) {
-          showAppInterface(userEmail);
-        } else {
-          fetchUserProfile();
-        }
+        showLoggedInUI(userEmail || "लिंक किया गया अकाउंट");
+        if (!userEmail) loadUserEmail();
       }
     };
 
-    async function fetchUserProfile() {
+    async function loadUserEmail() {
       try {
         const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
           headers: { "Authorization": `Bearer ${accessToken}` }
         });
         if (res.ok) {
-          const profile = await res.json();
-          userEmail = profile.email || "अज्ञात ईमेल";
+          const info = await res.json();
+          userEmail = info.email || "अकाउंट लिंक है";
           localStorage.setItem("fit_email", userEmail);
-          showAppInterface(userEmail);
+          showLoggedInUI(userEmail);
         } else {
-          logout();
+          showLoggedInUI(userEmail || "सक्रिय अकाउंट");
         }
       } catch (e) {
-        logout();
+        showLoggedInUI("सक्रिय अकाउंट");
       }
     }
 
-    function showAppInterface(email) {
+    function showLoggedInUI(emailText) {
       document.getElementById("authSection").style.display = "none";
       document.getElementById("appSection").style.display = "block";
-      document.getElementById("displayEmail").innerText = email;
-      log("सफलतापूर्वक कनेक्टेड: " + email);
+      document.getElementById("displayEmail").innerText = emailText;
+      log("सफलतापूर्वक कनेक्टेड। सिंक करने के लिए तैयार।");
     }
 
     function requestToken() {
@@ -117,9 +113,7 @@
 
     function logout() {
       if (accessToken) {
-        google.accounts.oauth2.revoke(accessToken, () => {
-          console.log("Token revoked");
-        });
+        google.accounts.oauth2.revoke(accessToken, () => {});
       }
       localStorage.removeItem("fit_token");
       localStorage.removeItem("fit_email");
@@ -129,8 +123,10 @@
 
       document.getElementById("authSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
-      document.getElementById("statusLog").textContent = "तैयार... कृपया लॉगिन करें।";
-      log("अकाउंट साइन आउट हो गया है। अब नए अकाउंट से लॉगिन कर सकते हैं।");
+      document.getElementById("adCounter").innerText = "देखे गए ऐड्स: 0 / 5";
+      document.getElementById("syncBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (0/5)";
+      document.getElementById("syncBtn").disabled = false;
+      document.getElementById("statusLog").textContent = "अकाउंट साइन आउट हो गया है। नया अकाउंट चुनने के लिए लॉगिन करें।";
     }
 
     function startSyncProcess() {
@@ -149,7 +145,7 @@
 
       if (adsWatched >= 5) {
         document.getElementById("syncBtn").disabled = true;
-        log("5 ऐड्स पूरे हुए! स्मार्ट बैकग्राउंड डिस्ट्रीब्यूशन शुरू...");
+        log("5 ऐड्स पूरे हुए! बैकग्राउंड स्टेप्स सिंक शुरू हो रहा है...");
         runDeFitStyleSync();
       }
     }
