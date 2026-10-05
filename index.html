@@ -14,7 +14,7 @@
     .btn { background: #0284c7; color: white; border: none; padding: 14px 20px; border-radius: 10px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 16px; transition: background 0.2s; }
     .btn:hover { background: #0369a1; }
     .btn:disabled { background: #475569; cursor: not-allowed; }
-    .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 120px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .status-box { margin-top: 20px; background: #0f172a; border-radius: 10px; padding: 16px; text-align: left; font-size: 13px; color: #cbd5e1; min-height: 140px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
     .counter { font-size: 15px; font-weight: 600; color: #38bdf8; margin-top: 14px; }
   </style>
 </head>
@@ -104,9 +104,7 @@
       }
     }
 
-    // यह फ़ंक्शन सीधे Google Fit से मौजूदा वैध डेटासोर्स लेगा या डिफ़ॉल्ट बनाएगा
     async function getValidDataSource() {
-      // 1. पहले Google Fit से चेक करेंगे कि कौन सा Step DataSource पहले से मौजूद है
       const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta", {
         headers: { "Authorization": `Bearer ${accessToken}` }
       });
@@ -118,7 +116,6 @@
         }
       }
 
-      // 2. अगर कोई नहीं मिला, तो एक स्टैंडर्ड डेटासोर्स बनाएंगे
       const createRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
         method: "POST",
         headers: {
@@ -142,35 +139,60 @@
 
     async function runStepInjection() {
       try {
-        log("सक्रिय डेटासोर्स की पुष्टि हो रही है...");
+        log("डेटासोर्स कनेक्ट किया जा रहा है...");
         const dataSourceId = await getValidDataSource();
-        log("डेटासोर्स कनेक्टेड: " + dataSourceId);
 
-        const totalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
+        // 11,000 से 13,000 के बीच कुल स्टेप्स
+        const targetTotalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
         
+        // 1 मिनट में औसतन 98-102 स्टेप्स की गति के अनुसार कुल मिनट तय करना (लगभग 110 से 125 मिनट)
+        const totalMinutes = Math.floor(targetTotalSteps / 100); 
+
         const nowMs = Date.now();
-        const oneHourAgoMs = nowMs - (60 * 60 * 1000);
+        const startSessionMs = nowMs - (totalMinutes * 60 * 1000);
 
-        const startNanosStr = (BigInt(oneHourAgoMs) * 1000000n).toString();
-        const endNanosStr = (BigInt(nowMs) * 1000000n).toString();
+        let points = [];
+        let accumulatedSteps = 0;
 
-        log(`कुल सिंक होने वाले स्टेप्स: ${totalSteps}`);
+        for (let i = 0; i < totalMinutes; i++) {
+          const mStartMs = startSessionMs + (i * 60 * 1000);
+          const mEndMs = mStartMs + (60 * 1000);
+
+          // हर 1 मिनट में 92 से 108 के बीच रैंडम नेचुरल स्टेप्स
+          let minuteSteps = Math.floor(Math.random() * (108 - 92 + 1)) + 92;
+
+          // आख़िरी मिनट में बाकी बचे स्टेप्स को एडजस्ट करें
+          if (i === totalMinutes - 1) {
+            minuteSteps = targetTotalSteps - accumulatedSteps;
+          }
+          accumulatedSteps += minuteSteps;
+
+          const pStartNanos = (BigInt(mStartMs) * 1000000n).toString();
+          const pEndNanos = (BigInt(mEndMs) * 1000000n).toString();
+
+          points.push({
+            "startTimeNanos": pStartNanos,
+            "endTimeNanos": pEndNanos,
+            "dataTypeName": "com.google.step_count.delta",
+            "value": [{ "intVal": minuteSteps }]
+          });
+        }
+
+        const totalStartNanos = (BigInt(startSessionMs) * 1000000n).toString();
+        const totalEndNanos = (BigInt(nowMs) * 1000000n).toString();
+
+        log(`सत्र अवधि: पिछले ${totalMinutes} मिनट में विभाजित।`);
+        log(`औसत गति: ~100 स्टेप्स/मिनट (स्वाभाविक चाल)`);
+        log(`कुल सिंक होने वाले स्टेप्स: ${accumulatedSteps}`);
 
         const requestBody = {
           "dataSourceId": dataSourceId,
-          "minStartTimeNs": startNanosStr,
-          "maxEndTimeNs": endNanosStr,
-          "point": [
-            {
-              "startTimeNanos": startNanosStr,
-              "endTimeNanos": endNanosStr,
-              "dataTypeName": "com.google.step_count.delta",
-              "value": [{ "intVal": totalSteps }]
-            }
-          ]
+          "minStartTimeNs": totalStartNanos,
+          "maxEndTimeNs": totalEndNanos,
+          "point": points
         };
 
-        const datasetId = `${startNanosStr}-${endNanosStr}`;
+        const datasetId = `${totalStartNanos}-${totalEndNanos}`;
         const apiUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodeURIComponent(dataSourceId)}/datasets/${datasetId}`;
 
         const res = await fetch(apiUrl, {
@@ -183,7 +205,7 @@
         });
 
         if (res.ok) {
-          log(`\n🎉 सफलता! ${totalSteps} स्टेप्स Google Fit में सिंक हो चुके हैं।`);
+          log(`\n🎉 सफलता! ${accumulatedSteps} स्टेप्स पिछले ${totalMinutes} मिनटों में मिनट-दर-मिनट स्वाभाविक रूप से सिंक हो चुके हैं।`);
         } else {
           const err = await res.json();
           log("सिंक त्रुटि: " + JSON.stringify(err));
