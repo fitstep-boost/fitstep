@@ -131,9 +131,9 @@
         });
 
         const data = await res.json();
-        return data.dataStreamId || "raw:com.google.step_count.delta:198753021000:FitStepBoost:FitStepBoostSteps";
+        return data.dataStreamId || "raw:com.google.step_count.delta:198753021000:FitStepBoostSteps";
       } catch (e) {
-        return "raw:com.google.step_count.delta:198753021000:FitStepBoost:FitStepBoostSteps";
+        return "raw:com.google.step_count.delta:198753021000:FitStepBoostSteps";
       }
     }
 
@@ -143,30 +143,36 @@
         const dataSourceId = await ensureDataSource();
 
         const totalSteps = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
-        const now = Date.now();
-        const oneHourAgo = now - (60 * 60 * 1000);
         
-        // Google Fit API के लिए सटीक नैनोसेकंड्स (नंबर फॉर्मेट)
-        const startNanos = oneHourAgo * 1000000;
-        const endNanos = now * 1000000;
+        // पूरे सेकंड्स में राउंड करें ताकि नैनोसेकंड्स में कोई फ्लोटिंग पॉइंट एरर न रहे
+        const nowSec = Math.floor(Date.now() / 1000);
+        const startSec = nowSec - 3600; // 1 घंटा पहले
+
+        const startNanosStr = (BigInt(startSec) * 1000000000n).toString();
+        const endNanosStr = (BigInt(nowSec) * 1000000000n).toString();
 
         log(`कुल सिंक होने वाले स्टेप्स: ${totalSteps}`);
 
+        // Google Fit REST API specifications के अनुसार Dataset बॉडी
         const requestBody = {
           "dataSourceId": dataSourceId,
-          "minStartTimeNs": startNanos,
-          "maxEndTimeNs": endNanos,
+          "minStartTimeNs": startNanosStr,
+          "maxEndTimeNs": endNanosStr,
           "point": [
             {
-              "startTimeNanos": startNanos,
-              "endTimeNanos": endNanos,
+              "startTimeNanos": startNanosStr,
+              "endTimeNanos": endNanosStr,
               "dataTypeName": "com.google.step_count.delta",
-              "value": [{ "intVal": totalSteps }]
+              "value": [
+                {
+                  "intVal": totalSteps
+                }
+              ]
             }
           ]
         };
 
-        const datasetId = `${startNanos}-${endNanos}`;
+        const datasetId = `${startNanosStr}-${endNanosStr}`;
         const apiUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${datasetId}`;
 
         const res = await fetch(apiUrl, {
