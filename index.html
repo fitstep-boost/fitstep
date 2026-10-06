@@ -253,32 +253,26 @@
 
       const activeStreamId = await ensureDataSource();
 
-      addLog("स्टेप्स को प्राकृतिक वॉक में विभाजित किया जा रहा है...");
+      addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
       
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
       
-      // वॉक को पिछले 2.5 घंटों में 12 अंतरालों में विभाजित किया जाता है
-      const numSegments = 12;
-      const segmentDurationMillis = 10 * 60 * 1000; // प्रत्येक सेशन 10 मिनट
-      const gapMillis = 2 * 60 * 1000;              // 2 मिनट का अंतराल
-      const totalSpanMillis = (numSegments * (segmentDurationMillis + gapMillis));
-      
-      let overallStartTimeMillis = now - totalSpanMillis - (10 * 60 * 1000);
       let points = [];
       let stepsRemaining = targetTotalSteps;
+      let minuteOffset = 15 * 60 * 1000; // अभी के समय से 15 मिनट पहले तक
+      let currentTimeCursor = now - minuteOffset;
 
-      for (let i = 0; i < numSegments; i++) {
-        let segStart = overallStartTimeMillis + (i * (segmentDurationMillis + gapMillis));
-        let segEnd = segStart + segmentDurationMillis;
-
-        let segSteps;
-        if (i === numSegments - 1) {
-          segSteps = stepsRemaining;
-        } else {
-          segSteps = Math.floor(stepsRemaining / (numSegments - i)) + Math.floor(Math.random() * 60 - 30);
+      // 1-1 मिनट के अंतरालों में 60 से 100 स्टेप्स प्रति मिनट भरेंगे
+      while (stepsRemaining > 0) {
+        let stepThisMinute = Math.floor(Math.random() * (100 - 60 + 1)) + 60;
+        if (stepsRemaining < stepThisMinute) {
+          stepThisMinute = stepsRemaining;
         }
-        stepsRemaining -= segSteps;
+        stepsRemaining -= stepThisMinute;
+
+        let segEnd = currentTimeCursor;
+        let segStart = currentTimeCursor - (60 * 1000); // 1 मिनट का स्लॉट
 
         let startNs = BigInt(segStart) * BigInt(1000000);
         let endNs = BigInt(segEnd) * BigInt(1000000);
@@ -287,13 +281,23 @@
           startTimeNanos: startNs.toString(),
           endTimeNanos: endNs.toString(),
           dataTypeName: "com.google.step_count.delta",
-          value: [{ intVal: segSteps }]
+          value: [{ intVal: stepThisMinute }]
         });
+
+        // अगला मिनट पीछे ले जाएँ
+        currentTimeCursor = segStart;
       }
 
+      // पूरे स्पैन का सबसे पहला और आखिरी समय
+      let overallStartTimeMillis = currentTimeCursor;
+      let overallEndTimeMillis = now - minuteOffset;
+
       const overallStartNs = BigInt(overallStartTimeMillis) * BigInt(1000000);
-      const overallEndNs = BigInt(now - (10 * 60 * 1000)) * BigInt(1000000);
+      const overallEndNs = BigInt(overallEndTimeMillis) * BigInt(1000000);
       const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
+
+      // ऐरे को टाइम के अनुसार ascending ऑर्डर में सॉर्ट करें
+      points.reverse();
 
       const payload = {
         dataSourceId: activeStreamId,
@@ -312,8 +316,8 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + targetTotalSteps + " स्टेप्स प्राकृतिक रूप से सिंक हो गए!");
-          createSession(overallStartTimeMillis, now - (10 * 60 * 1000), targetTotalSteps);
+          addLog("✅ " + targetTotalSteps + " स्टेप्स प्रति-मिनट वॉक के साथ सिंक हो गए!");
+          createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
         } else {
           res.json().then(errData => {
             if (errData && errData.error && errData.error.message) {
