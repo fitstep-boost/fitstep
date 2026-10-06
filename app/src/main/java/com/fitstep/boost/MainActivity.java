@@ -2,22 +2,16 @@ package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
-import android.view.ViewGroup;
-import android.webkit.CookieManager;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
@@ -26,103 +20,75 @@ import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "FitStep_MainActivity";
+    private static final String LIVE_REWARDED_AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
+    private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
-    private WebView webView;
-    private WebView popupWebView;
-    private RewardedAd rewardedAd;
+    private WebView mainWebView;
+    private RewardedAd mRewardedAd;
     private boolean isAdLoading = false;
-    private static final String TARGET_URL = "https://fitstep-boost.github.io/fitstep/";
-    private static final String AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
 
-    @SuppressLint("SetJavaScriptEnabled")
     @Override
+    @SuppressLint("SetJavaScriptEnabled")
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
-        try {
-            MobileAds.initialize(this, initializationStatus -> {
-                runOnUiThread(this::loadRewardedAd);
-            });
-        } catch (Exception ignored) {}
+        MobileAds.initialize(this, initializationStatus -> {
+            Log.d(TAG, "AdMob Initialized");
+        });
+        loadRewardedAd();
 
-        webView = new WebView(this);
-        webView.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        setContentView(webView);
+        mainWebView = findViewById(R.id.webview);
+        WebSettings webSettings = mainWebView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setDatabaseEnabled(true);
+        webSettings.setSupportMultipleWindows(true);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
 
-        configureSettings(webView);
+        mainWebView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(webView, true);
-
-        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new CustomWebChromeClient());
-
-        if (savedInstanceState == null) {
-            webView.loadUrl(TARGET_URL);
-        } else {
-            webView.restoreState(savedInstanceState);
-        }
-
-        new Handler(Looper.getMainLooper()).postDelayed(this::loadRewardedAd, 1500);
-
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+        mainWebView.setWebChromeClient(new WebChromeClient() {
             @Override
-            public void handleOnBackPressed() {
-                if (popupWebView != null) {
-                    ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
-                    popupWebView.destroy();
-                    popupWebView = null;
-                } else if (webView.canGoBack()) {
-                    webView.goBack();
-                } else {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
-                }
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                WebView popupWebView = new WebView(MainActivity.this);
+                popupWebView.getSettings().setJavaScriptEnabled(true);
+                popupWebView.getSettings().setDomStorageEnabled(true);
+                popupWebView.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onCloseWindow(WebView window) {
+                        mainWebView.removeView(window);
+                    }
+                });
+                popupWebView.setWebViewClient(new WebViewClient());
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(popupWebView);
+                resultMsg.sendToTarget();
+                return true;
             }
         });
+
+        mainWebView.setWebViewClient(new WebViewClient());
+        mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
     private void loadRewardedAd() {
-        if (isAdLoading || rewardedAd != null) {
-            return;
-        }
+        if (mRewardedAd != null || isAdLoading) return;
         isAdLoading = true;
-
         AdRequest adRequest = new AdRequest.Builder().build();
-        RewardedAd.load(this, AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
+        RewardedAd.load(this, LIVE_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
-            public void onAdLoaded(@NonNull RewardedAd ad) {
-                rewardedAd = ad;
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                Log.e(TAG, "Ad silent background retry: " + loadAdError.getMessage());
+                mRewardedAd = null;
                 isAdLoading = false;
-
-                rewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
-                    @Override
-                    public void onAdDismissedFullScreenContent() {
-                        rewardedAd = null;
-                        loadRewardedAd();
-                    }
-
-                    @Override
-                    public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
-                        rewardedAd = null;
-                        loadRewardedAd();
-                    }
-                });
             }
 
             @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                rewardedAd = null;
+            public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
+                mRewardedAd = rewardedAd;
                 isAdLoading = false;
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this, "ऐड लोड नहीं हुआ: " + loadAdError.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-                new Handler(Looper.getMainLooper()).postDelayed(() -> loadRewardedAd(), 5000);
             }
         });
     }
@@ -130,80 +96,29 @@ public class MainActivity extends AppCompatActivity {
     public class WebAppInterface {
         @JavascriptInterface
         public void showRewardedAd() {
-            new Handler(Looper.getMainLooper()).post(() -> {
-                if (rewardedAd != null) {
-                    rewardedAd.show(MainActivity.this, rewardItem -> {
-                        webView.evaluateJavascript("if(window.adRewardCompleted) { window.adRewardCompleted(); }", null);
+            runOnUiThread(() -> {
+                if (mRewardedAd != null) {
+                    mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        @Override
+                        public void onAdDismissedFullScreenContent() {
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+
+                        @Override
+                        public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+                    });
+                    mRewardedAd.show(MainActivity.this, rewardItem -> {
+                        mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "ऐड तैयार किया जा रहा है, 2 सेकंड प्रतीक्षा करें...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "अगला ऐड लोड हो रहा है, 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
         }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private void configureSettings(WebView view) {
-        WebSettings settings = view.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setSupportMultipleWindows(true);
-        settings.setJavaScriptCanOpenWindowsAutomatically(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-
-        String chromeAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36";
-        settings.setUserAgentString(chromeAgent);
-    }
-
-    private class CustomWebChromeClient extends WebChromeClient {
-        @Override
-        public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-            popupWebView = new WebView(MainActivity.this);
-            configureSettings(popupWebView);
-
-            CookieManager.getInstance().setAcceptThirdPartyCookies(popupWebView, true);
-
-            popupWebView.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-            ));
-
-            popupWebView.setWebViewClient(new WebViewClient());
-            popupWebView.setWebChromeClient(new WebChromeClient() {
-                @Override
-                public void onCloseWindow(WebView window) {
-                    if (popupWebView != null) {
-                        ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
-                        popupWebView.destroy();
-                        popupWebView = null;
-                    }
-                }
-            });
-
-            addContentView(popupWebView, popupWebView.getLayoutParams());
-
-            WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
-            transport.setWebView(popupWebView);
-            resultMsg.sendToTarget();
-            return true;
-        }
-
-        @Override
-        public void onCloseWindow(WebView window) {
-            if (popupWebView != null) {
-                ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
-                popupWebView.destroy();
-                popupWebView = null;
-            }
-        }
-    }
-
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        webView.saveState(outState);
     }
 }
