@@ -253,26 +253,53 @@
 
       const activeStreamId = await ensureDataSource();
 
-      addLog("स्टेप्स की गणना की जा रही है...");
-      const totalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
+      addLog("स्टेप्स को प्राकृतिक वॉक में विभाजित किया जा रहा है...");
+      
+      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
-      const startTimeMillis = now - (6 * 60 * 60 * 1000);
-      const endTimeMillis = now - (15 * 60 * 1000);
+      
+      // वॉक को पिछले 2.5 घंटों में 12 अंतरालों में विभाजित किया जाता है
+      const numSegments = 12;
+      const segmentDurationMillis = 10 * 60 * 1000; // प्रत्येक सेशन 10 मिनट
+      const gapMillis = 2 * 60 * 1000;              // 2 मिनट का अंतराल
+      const totalSpanMillis = (numSegments * (segmentDurationMillis + gapMillis));
+      
+      let overallStartTimeMillis = now - totalSpanMillis - (10 * 60 * 1000);
+      let points = [];
+      let stepsRemaining = targetTotalSteps;
 
-      const startTimeNs = BigInt(startTimeMillis) * BigInt(1000000);
-      const endTimeNs = BigInt(endTimeMillis) * BigInt(1000000);
-      const datasetId = startTimeNs.toString() + "-" + endTimeNs.toString();
+      for (let i = 0; i < numSegments; i++) {
+        let segStart = overallStartTimeMillis + (i * (segmentDurationMillis + gapMillis));
+        let segEnd = segStart + segmentDurationMillis;
+
+        let segSteps;
+        if (i === numSegments - 1) {
+          segSteps = stepsRemaining;
+        } else {
+          segSteps = Math.floor(stepsRemaining / (numSegments - i)) + Math.floor(Math.random() * 60 - 30);
+        }
+        stepsRemaining -= segSteps;
+
+        let startNs = BigInt(segStart) * BigInt(1000000);
+        let endNs = BigInt(segEnd) * BigInt(1000000);
+
+        points.push({
+          startTimeNanos: startNs.toString(),
+          endTimeNanos: endNs.toString(),
+          dataTypeName: "com.google.step_count.delta",
+          value: [{ intVal: segSteps }]
+        });
+      }
+
+      const overallStartNs = BigInt(overallStartTimeMillis) * BigInt(1000000);
+      const overallEndNs = BigInt(now - (10 * 60 * 1000)) * BigInt(1000000);
+      const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
 
       const payload = {
         dataSourceId: activeStreamId,
-        minStartTimeNs: startTimeNs.toString(),
-        maxEndTimeNs: endTimeNs.toString(),
-        point: [{
-          startTimeNanos: startTimeNs.toString(),
-          endTimeNanos: endTimeNs.toString(),
-          dataTypeName: "com.google.step_count.delta",
-          value: [{ intVal: totalSteps }]
-        }]
+        minStartTimeNs: overallStartNs.toString(),
+        maxEndTimeNs: overallEndNs.toString(),
+        point: points
       };
 
       fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
@@ -285,8 +312,8 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
-          createSession(startTimeMillis, endTimeMillis, totalSteps);
+          addLog("✅ " + targetTotalSteps + " स्टेप्स प्राकृतिक रूप से सिंक हो गए!");
+          createSession(overallStartTimeMillis, now - (10 * 60 * 1000), targetTotalSteps);
         } else {
           res.json().then(errData => {
             if (errData && errData.error && errData.error.message) {
