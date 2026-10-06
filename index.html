@@ -116,8 +116,8 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
 
     let tokenClient;
-    let accessToken = localStorage.getItem("fitstep_token") || null;
-    let userEmail = localStorage.getItem("fitstep_email") || "";
+    let accessToken = null;
+    let userEmail = localStorage.getItem("fitstep_saved_email") || "";
     let adsWatched = 0;
     const requiredAds = 5;
 
@@ -127,48 +127,57 @@
       box.scrollTop = box.scrollHeight;
     }
 
-    function getTodayKey() {
+    function getTodayKey(email) {
       const d = new Date();
-      return "sync_done_" + userEmail + "_" + d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+      return "sync_done_" + email + "_" + d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
     }
 
-    function isAlreadySyncedToday() {
-      return localStorage.getItem(getTodayKey()) === "true";
+    function isAlreadySyncedToday(email) {
+      if (!email) return false;
+      return localStorage.getItem(getTodayKey(email)) === "true";
     }
 
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid",
+        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email",
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             accessToken = tokenResponse.access_token;
-            localStorage.setItem("fitstep_token", accessToken);
             fetchEmail();
           } else {
-            addLog("लॉगिन निरस्त हुआ।");
+            addLog("लॉगिन निरस्त हुआ या अनुमति नहीं मिली।");
           }
         }
       });
 
-      // Agar pehle se login hai toh seedhe dashboard dikhao
-      if (userEmail && accessToken) {
+      // Agar user pehle se login tha, toh email dikha kar direct check karo
+      if (userEmail) {
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
-        addLog("लॉगिन बहाल हुआ: <b>" + userEmail + "</b>");
-        checkDailyStatusAndProceed();
+        addLog("अकाउंट लोड हुआ: <b>" + userEmail + "</b>");
+
+        if (isAlreadySyncedToday(userEmail)) {
+          document.getElementById("doneBanner").style.display = "block";
+          document.getElementById("adBtn").disabled = true;
+          document.getElementById("syncBtn").disabled = true;
+          document.getElementById("adCounter").style.display = "none";
+          addLog("ℹ️ आज के स्टेप्स सिंक हो चुके हैं। अगला सिंक आज रात 12:00 बजे के बाद उपलब्ध होगा।");
+        } else {
+          // Token fresh lene ke liye silent ya direct request
+          verifyWhitelist(userEmail);
+        }
       }
     };
 
     function login() {
       addLog("Google लॉगिन विंडो खोली जा रही है...");
-      tokenClient.requestAccessToken({ prompt: "" });
+      tokenClient.requestAccessToken({ prompt: "select_account" });
     }
 
     function logout() {
-      localStorage.removeItem("fitstep_token");
-      localStorage.removeItem("fitstep_email");
+      localStorage.removeItem("fitstep_saved_email");
       accessToken = null;
       userEmail = "";
       adsWatched = 0;
@@ -185,34 +194,31 @@
       .then(r => r.json())
       .then(info => {
         userEmail = info.email;
-        localStorage.setItem("fitstep_email", userEmail);
+        localStorage.setItem("fitstep_saved_email", userEmail);
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
-        addLog("अकाउंट: <b>" + userEmail + "</b>");
-        checkDailyStatusAndProceed();
+        addLog("लॉगिन सफल: <b>" + userEmail + "</b>");
+
+        if (isAlreadySyncedToday(userEmail)) {
+          document.getElementById("doneBanner").style.display = "block";
+          document.getElementById("adBtn").disabled = true;
+          document.getElementById("syncBtn").disabled = true;
+          document.getElementById("adCounter").style.display = "none";
+          addLog("ℹ️ आज के स्टेप्स सिंक हो चुके हैं। अगला सिंक आज रात 12:00 बजे के बाद खुलेगा।");
+        } else {
+          document.getElementById("doneBanner").style.display = "none";
+          document.getElementById("adCounter").style.display = "block";
+          verifyWhitelist(userEmail);
+        }
       })
       .catch(e => {
-        addLog("प्रोफाइल लोड त्रुटि: टोकन रीफ्रेश करें।");
+        addLog("प्रोफाइल लोड त्रुटि: " + e.message);
       });
     }
 
-    function checkDailyStatusAndProceed() {
-      if (isAlreadySyncedToday()) {
-        document.getElementById("doneBanner").style.display = "block";
-        document.getElementById("adBtn").disabled = true;
-        document.getElementById("syncBtn").disabled = true;
-        document.getElementById("adCounter").style.display = "none";
-        addLog("ℹ️ आज के स्टेप्स पहले ही सिंक हो चुके हैं। अगला सिंक आज रात 12:00 बजे के बाद उपलब्ध होगा।");
-      } else {
-        document.getElementById("doneBanner").style.display = "none";
-        document.getElementById("adCounter").style.display = "block";
-        verifyWhitelist(userEmail);
-      }
-    }
-
     function verifyWhitelist(email) {
-      addLog("एडमिन अनुमति (Whitelist) व ऐप वर्ज़न चेक की जा रही है...");
+      addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
       const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
@@ -222,7 +228,7 @@
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न " + data.requiredVersion + " उपलब्ध है।");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
           alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
           addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
@@ -235,8 +241,13 @@
     }
 
     function playAd() {
-      if (isAlreadySyncedToday()) {
-        alert("आज का सिंक पूरा हो चुका है। कृपया रात 12:00 बजे के बाद प्रयास करें।");
+      if (isAlreadySyncedToday(userEmail)) {
+        alert("आज का सिंक कोटा पूरा हो चुका है। कृपया रात 12:00 बजे के बाद प्रयास करें।");
+        return;
+      }
+      if (!accessToken) {
+        // Agar token nahi hai toh sidha login refresh maang lo
+        tokenClient.requestAccessToken({ prompt: "" });
         return;
       }
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
@@ -250,7 +261,7 @@
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("ऐड देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -262,8 +273,13 @@
     };
 
     function syncSteps() {
-      if (isAlreadySyncedToday()) {
+      if (isAlreadySyncedToday(userEmail)) {
         alert("आज का सिंक पहले ही पूरा हो चुका है!");
+        return;
+      }
+
+      if (!accessToken) {
+        tokenClient.requestAccessToken({ prompt: "" });
         return;
       }
 
@@ -303,8 +319,8 @@
       .then(res => {
         if (res.ok) {
           addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
-          
-          localStorage.setItem(getTodayKey(), "true");
+          localStorage.setItem(getTodayKey(userEmail), "true");
+
           document.getElementById("doneBanner").style.display = "block";
           document.getElementById("adBtn").disabled = true;
           document.getElementById("syncBtn").disabled = true;
@@ -313,7 +329,11 @@
 
           createSession(startTimeMillis, endTimeMillis, totalSteps);
         } else {
-          addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
+          res.json().then(data => {
+            addLog("त्रुटि: " + (data.error ? data.error.message : "अनुमति अस्वीकृत"));
+          }).catch(() => {
+            addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
+          });
           document.getElementById("syncBtn").disabled = false;
         }
       })
