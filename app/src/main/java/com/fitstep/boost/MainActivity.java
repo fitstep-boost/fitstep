@@ -3,7 +3,6 @@ package com.fitstep.boost;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Message;
-import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -21,7 +20,6 @@ import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "FitStep_MainActivity";
     private static final String LIVE_REWARDED_AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
@@ -46,9 +44,7 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.addView(mainWebView);
         setContentView(rootLayout);
 
-        MobileAds.initialize(this, initializationStatus -> {
-            Log.d(TAG, "AdMob Initialized");
-        });
+        MobileAds.initialize(this, initializationStatus -> {});
         loadRewardedAd();
 
         WebSettings webSettings = mainWebView.getSettings();
