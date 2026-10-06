@@ -62,6 +62,16 @@
     .btn-refresh { background: #0284c7; color: #fff; padding: 7px 14px; font-size: 12px; border-radius: 8px; width: auto; }
     .btn:disabled { background: #1e293b; border: 1px solid #334155; color: #475569; cursor: not-allowed; }
     .ad-counter-text { font-size: 13px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
+    .admin-badge {
+      background: #854d0e;
+      color: #fef08a;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: none;
+    }
     .status-text {
       background: #0f172a;
       border-radius: 12px;
@@ -97,6 +107,8 @@
         </div>
       </div>
 
+      <div id="adminBadge" class="admin-badge">🛠️ एडमिन टेस्ट मोड: ऐड्स बायपास सक्रिय</div>
+
       <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
       <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
       <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
@@ -109,6 +121,11 @@
     const APP_VERSION = "1.0";
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
+
+    // केवल मुख्य डेवलपर ईमेल
+    const ADMIN_EMAILS = [
+      "playwithmebysk@gmail.com"
+    ];
 
     let tokenClient;
     let accessToken = null;
@@ -146,6 +163,7 @@
       adsWatched = 0;
       document.getElementById("loginSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
+      document.getElementById("adminBadge").style.display = "none";
       document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
     }
 
@@ -156,7 +174,7 @@
       })
       .then(r => r.json())
       .then(info => {
-        userEmail = info.email;
+        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
@@ -175,7 +193,22 @@
 
         if (data.allowed) {
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          document.getElementById("adBtn").disabled = false;
+          
+          const cleanEmail = email.toLowerCase().replace(/\s+/g, "").trim();
+          if (ADMIN_EMAILS.includes(cleanEmail)) {
+            document.getElementById("adminBadge").style.display = "block";
+            document.getElementById("adBtn").style.display = "none";
+            document.getElementById("adCounter").style.display = "none";
+            const syncBtn = document.getElementById("syncBtn");
+            syncBtn.disabled = false;
+            syncBtn.classList.add("active");
+            addLog("⚡ <b>एडमिन टेस्ट मोड सक्रिय:</b> बिना ऐड देखे सीधे 'स्टेप्स सिंक करें' दबाएँ।");
+          } else {
+            document.getElementById("adminBadge").style.display = "none";
+            document.getElementById("adBtn").style.display = "block";
+            document.getElementById("adCounter").style.display = "block";
+            document.getElementById("adBtn").disabled = false;
+          }
         } else if (data.status === "OUTDATED_VERSION") {
           addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
           alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
@@ -213,9 +246,25 @@
     };
 
     async function ensureDataSource() {
+      try {
+        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          headers: { Authorization: "Bearer " + accessToken }
+        });
+        const listData = await listRes.json();
+        if (listData && listData.dataSource) {
+          for (let ds of listData.dataSource) {
+            if (ds.dataStreamName === "FitStepBoostSteps" || ds.dataType.name === "com.google.step_count.delta") {
+              return ds.dataStreamId;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("DataSource check error:", err);
+      }
+
       const payload = {
-        dataStreamName: "FitStepDelta",
-        type: "raw",
+        dataStreamName: "FitStepBoostSteps",
+        type: "derived",
         application: {
           name: "FitStep Boost",
           version: "1.0"
@@ -223,6 +272,13 @@
         dataType: {
           name: "com.google.step_count.delta",
           field: [{ name: "steps", format: "integer" }]
+        },
+        device: {
+          manufacturer: "FitStep",
+          model: "StepSensor",
+          type: "phone",
+          uid: "fitstep_sensor_v1",
+          version: "1.0"
         }
       };
 
@@ -241,7 +297,7 @@
           return data.dataStreamId;
         }
       } catch (e) {
-        console.error("DataSource check exception:", e);
+        console.error("DataSource create exception:", e);
       }
 
       return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
@@ -249,10 +305,11 @@
 
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("Google Fit डेटासोर्स तैयार किया जा रहा है...");
+      addLog("Google Fit डेटासोर्स जाँचा जा रहा है...");
 
       const activeStreamId = await ensureDataSource();
 
+      addLog("डेटासोर्स कनेक्टेड: <b>" + activeStreamId.split(":")[0] + "...</b>");
       addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
       
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
@@ -260,10 +317,9 @@
       
       let points = [];
       let stepsRemaining = targetTotalSteps;
-      let minuteOffset = 15 * 60 * 1000; // अभी के समय से 15 मिनट पहले तक
+      let minuteOffset = 15 * 60 * 1000;
       let currentTimeCursor = now - minuteOffset;
 
-      // 1-1 मिनट के अंतरालों में 60 से 100 स्टेप्स प्रति मिनट भरेंगे
       while (stepsRemaining > 0) {
         let stepThisMinute = Math.floor(Math.random() * (100 - 60 + 1)) + 60;
         if (stepsRemaining < stepThisMinute) {
@@ -272,7 +328,7 @@
         stepsRemaining -= stepThisMinute;
 
         let segEnd = currentTimeCursor;
-        let segStart = currentTimeCursor - (60 * 1000); // 1 मिनट का स्लॉट
+        let segStart = currentTimeCursor - (60 * 1000);
 
         let startNs = BigInt(segStart) * BigInt(1000000);
         let endNs = BigInt(segEnd) * BigInt(1000000);
@@ -284,11 +340,9 @@
           value: [{ intVal: stepThisMinute }]
         });
 
-        // अगला मिनट पीछे ले जाएँ
         currentTimeCursor = segStart;
       }
 
-      // पूरे स्पैन का सबसे पहला और आखिरी समय
       let overallStartTimeMillis = currentTimeCursor;
       let overallEndTimeMillis = now - minuteOffset;
 
@@ -296,7 +350,6 @@
       const overallEndNs = BigInt(overallEndTimeMillis) * BigInt(1000000);
       const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
 
-      // ऐरे को टाइम के अनुसार ascending ऑर्डर में सॉर्ट करें
       points.reverse();
 
       const payload = {
