@@ -11,7 +11,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.gms.ads.AdRequest;
@@ -35,7 +34,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // किसी भी XML लेआउट फ़ाइल पर निर्भरता खत्म करने के लिए प्रोग्रामैटिक व्यू
         FrameLayout rootLayout = new FrameLayout(this);
         rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -48,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.addView(mainWebView);
         setContentView(rootLayout);
 
-        // AdMob SDK शुरू करें
         MobileAds.initialize(this, initializationStatus -> {
             Log.d(TAG, "AdMob Initialized");
         });
@@ -69,13 +66,22 @@ public class MainActivity extends AppCompatActivity {
                 WebView popupWebView = new WebView(MainActivity.this);
                 popupWebView.getSettings().setJavaScriptEnabled(true);
                 popupWebView.getSettings().setDomStorageEnabled(true);
+                popupWebView.getSettings().setSupportMultipleWindows(true);
+                popupWebView.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
+
                 popupWebView.setWebChromeClient(new WebChromeClient() {
                     @Override
                     public void onCloseWindow(WebView window) {
-                        mainWebView.removeView(window);
+                        rootLayout.removeView(window);
                     }
                 });
+
                 popupWebView.setWebViewClient(new WebViewClient());
+                popupWebView.setLayoutParams(new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+                rootLayout.addView(popupWebView);
+
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 transport.setWebView(popupWebView);
                 resultMsg.sendToTarget();
@@ -94,7 +100,6 @@ public class MainActivity extends AppCompatActivity {
         RewardedAd.load(this, LIVE_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                Log.e(TAG, "Ad silent background retry: " + loadAdError.getMessage());
                 mRewardedAd = null;
                 isAdLoading = false;
             }
@@ -129,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
                         mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
                 } else {
-                    Toast.makeText(MainActivity.this, "अगला ऐड लोड हो रहा है, 2 सेकंड बाद दबाएँ...", Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
             });
