@@ -136,7 +136,8 @@
     };
 
     function login() {
-      tokenClient.requestAccessToken({ prompt: "" });
+      addLog("Google लॉगिन खोला जा रहा है...");
+      tokenClient.requestAccessToken({ prompt: "select_account" });
     }
 
     function logout() {
@@ -166,7 +167,7 @@
     }
 
     function verifyWhitelist(email) {
-      addLog("एडमिन अनुमति (Whitelist) व ऐप वर्ज़न चेक की जा रही है...");
+      addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
       const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
@@ -176,7 +177,7 @@
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न " + data.requiredVersion + " उपलब्ध है। कृपया नई APK इंस्टॉल करें।");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
           alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
           addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
@@ -250,7 +251,15 @@
           addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
           createSession(startTimeMillis, endTimeMillis, totalSteps);
         } else {
-          addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
+          res.json().then(errData => {
+            if (errData && errData.error && errData.error.message) {
+              addLog("सिंक त्रुटि: " + errData.error.message);
+            } else {
+              addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
+            }
+          }).catch(() => {
+            addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
+          });
           document.getElementById("syncBtn").disabled = false;
         }
       })
