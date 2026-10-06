@@ -69,6 +69,16 @@
       overflow-y: auto;
     }
     .status-text b { color: #38bdf8; }
+    .done-banner {
+      background: #14532d;
+      border: 1px solid #22c55e;
+      color: #86efac;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 14px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -88,6 +98,10 @@
         <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
 
+      <div id="doneBanner" class="done-banner">
+        ✅ <b>आज का कोटा पूरा हुआ!</b><br>आप आज के स्टेप्स सिंक कर चुके हैं। अगला मौका आज रात 12:00 बजे (Midnight) के बाद मिलेगा।
+      </div>
+
       <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
       <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
       <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
@@ -102,8 +116,8 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
 
     let tokenClient;
-    let accessToken = null;
-    let userEmail = "";
+    let accessToken = localStorage.getItem("fitstep_token") || null;
+    let userEmail = localStorage.getItem("fitstep_email") || "";
     let adsWatched = 0;
     const requiredAds = 5;
 
@@ -113,6 +127,15 @@
       box.scrollTop = box.scrollHeight;
     }
 
+    function getTodayKey() {
+      const d = new Date();
+      return "sync_done_" + userEmail + "_" + d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+
+    function isAlreadySyncedToday() {
+      return localStorage.getItem(getTodayKey()) === "true";
+    }
+
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -120,26 +143,38 @@
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             accessToken = tokenResponse.access_token;
+            localStorage.setItem("fitstep_token", accessToken);
             fetchEmail();
           } else {
-            addLog("लॉगिन अनुमति निरस्त की गई।");
+            addLog("लॉगिन निरस्त हुआ।");
           }
         }
       });
+
+      // Agar pehle se login hai toh seedhe dashboard dikhao
+      if (userEmail && accessToken) {
+        document.getElementById("userEmailText").innerText = userEmail;
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("appSection").style.display = "block";
+        addLog("लॉगिन बहाल हुआ: <b>" + userEmail + "</b>");
+        checkDailyStatusAndProceed();
+      }
     };
 
     function login() {
       addLog("Google लॉगिन विंडो खोली जा रही है...");
-      tokenClient.requestAccessToken();
+      tokenClient.requestAccessToken({ prompt: "" });
     }
 
     function logout() {
+      localStorage.removeItem("fitstep_token");
+      localStorage.removeItem("fitstep_email");
       accessToken = null;
       userEmail = "";
       adsWatched = 0;
       document.getElementById("loginSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
-      document.getElementById("statusBox").innerHTML = "तैयार... कृपया लॉगिन करें।";
+      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
     }
 
     function fetchEmail() {
@@ -150,15 +185,30 @@
       .then(r => r.json())
       .then(info => {
         userEmail = info.email;
+        localStorage.setItem("fitstep_email", userEmail);
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
         addLog("अकाउंट: <b>" + userEmail + "</b>");
-        verifyWhitelist(userEmail);
+        checkDailyStatusAndProceed();
       })
       .catch(e => {
-        addLog("प्रोफाइल लोड त्रुटि: " + e.message);
+        addLog("प्रोफाइल लोड त्रुटि: टोकन रीफ्रेश करें।");
       });
+    }
+
+    function checkDailyStatusAndProceed() {
+      if (isAlreadySyncedToday()) {
+        document.getElementById("doneBanner").style.display = "block";
+        document.getElementById("adBtn").disabled = true;
+        document.getElementById("syncBtn").disabled = true;
+        document.getElementById("adCounter").style.display = "none";
+        addLog("ℹ️ आज के स्टेप्स पहले ही सिंक हो चुके हैं। अगला सिंक आज रात 12:00 बजे के बाद उपलब्ध होगा।");
+      } else {
+        document.getElementById("doneBanner").style.display = "none";
+        document.getElementById("adCounter").style.display = "block";
+        verifyWhitelist(userEmail);
+      }
     }
 
     function verifyWhitelist(email) {
@@ -172,7 +222,7 @@
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न " + data.requiredVersion + " उपलब्ध है।");
           alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
           addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
@@ -185,6 +235,10 @@
     }
 
     function playAd() {
+      if (isAlreadySyncedToday()) {
+        alert("आज का सिंक पूरा हो चुका है। कृपया रात 12:00 बजे के बाद प्रयास करें।");
+        return;
+      }
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
@@ -208,6 +262,11 @@
     };
 
     function syncSteps() {
+      if (isAlreadySyncedToday()) {
+        alert("आज का सिंक पहले ही पूरा हो चुका है!");
+        return;
+      }
+
       document.getElementById("syncBtn").disabled = true;
       addLog("स्टेप्स की गणना की जा रही है...");
 
@@ -244,9 +303,17 @@
       .then(res => {
         if (res.ok) {
           addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
+          
+          localStorage.setItem(getTodayKey(), "true");
+          document.getElementById("doneBanner").style.display = "block";
+          document.getElementById("adBtn").disabled = true;
+          document.getElementById("syncBtn").disabled = true;
+          document.getElementById("syncBtn").classList.remove("active");
+          document.getElementById("adCounter").style.display = "none";
+
           createSession(startTimeMillis, endTimeMillis, totalSteps);
         } else {
-          addLog("सिंक त्रुटि। कृपया दोबारा प्रयास करें।");
+          addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
           document.getElementById("syncBtn").disabled = false;
         }
       })
