@@ -212,10 +212,48 @@
       }
     };
 
-    function syncSteps() {
-      document.getElementById("syncBtn").disabled = true;
-      addLog("स्टेप्स की गणना की जा रही है...");
+    async function ensureDataSource() {
+      const payload = {
+        dataStreamName: "FitStepDelta",
+        type: "raw",
+        application: {
+          name: "FitStep Boost",
+          version: "1.0"
+        },
+        dataType: {
+          name: "com.google.step_count.delta",
+          field: [{ name: "steps", format: "integer" }]
+        }
+      };
 
+      try {
+        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data && data.dataStreamId) {
+          return data.dataStreamId;
+        }
+      } catch (e) {
+        console.error("DataSource check exception:", e);
+      }
+
+      return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
+    }
+
+    async function syncSteps() {
+      document.getElementById("syncBtn").disabled = true;
+      addLog("Google Fit डेटासोर्स तैयार किया जा रहा है...");
+
+      const activeStreamId = await ensureDataSource();
+
+      addLog("स्टेप्स की गणना की जा रही है...");
       const totalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
       const startTimeMillis = now - (6 * 60 * 60 * 1000);
@@ -224,10 +262,9 @@
       const startTimeNs = BigInt(startTimeMillis) * BigInt(1000000);
       const endTimeNs = BigInt(endTimeMillis) * BigInt(1000000);
       const datasetId = startTimeNs.toString() + "-" + endTimeNs.toString();
-      const dataSourceId = "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
 
       const payload = {
-        dataSourceId: dataSourceId,
+        dataSourceId: activeStreamId,
         minStartTimeNs: startTimeNs.toString(),
         maxEndTimeNs: endTimeNs.toString(),
         point: [{
@@ -238,7 +275,7 @@
         }]
       };
 
-      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(dataSourceId) + "/datasets/" + datasetId, {
+      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
         method: "PATCH",
         headers: {
           Authorization: "Bearer " + accessToken,
