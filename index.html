@@ -9,7 +9,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: #0f172a;
+      background-color: #0b1120;
       color: #f8fafc;
       display: flex;
       flex-direction: column;
@@ -19,49 +19,53 @@
     }
     .card {
       background: #1e293b;
-      border-radius: 16px;
+      border-radius: 20px;
       width: 100%;
       max-width: 420px;
-      padding: 24px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      padding: 26px 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       text-align: center;
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #38bdf8; }
-    p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 22px; }
     .user-box {
       background: #0f172a;
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 16px;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 18px;
       font-size: 13px;
       word-break: break-all;
     }
+    .user-label { color: #94a3b8; font-size: 12px; margin-bottom: 4px; }
+    .user-email { color: #38bdf8; font-weight: 600; font-size: 14px; margin-bottom: 10px; }
     .btn {
       width: 100%;
       padding: 14px;
       border: none;
-      border-radius: 10px;
+      border-radius: 12px;
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
       margin-bottom: 12px;
       transition: all 0.2s;
     }
-    .btn-login { background: #2563eb; color: #fff; }
+    .btn-login { background: #0284c7; color: #fff; }
     .btn-ad { background: #0284c7; color: #fff; }
-    .btn-sync { background: #16a34a; color: #fff; }
-    .btn-logout { background: #dc2626; color: #fff; padding: 8px 16px; font-size: 12px; width: auto; margin-top: 8px; border-radius: 6px; }
-    .btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .btn-sync { background: #1e3a5f; color: #64748b; }
+    .btn-sync.active { background: #16a34a; color: #fff; }
+    .btn-logout { background: #ef4444; color: #fff; padding: 7px 18px; font-size: 12px; border-radius: 8px; width: auto; }
+    .btn:disabled { background: #1e293b; border: 1px solid #334155; color: #475569; cursor: not-allowed; }
+    .ad-counter-text { font-size: 13px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
     .status-text {
       background: #0f172a;
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 14px;
       font-size: 12px;
       color: #94a3b8;
       text-align: left;
-      line-height: 1.6;
+      line-height: 1.7;
       margin-top: 14px;
-      max-height: 160px;
+      max-height: 170px;
       overflow-y: auto;
     }
     .status-text b { color: #38bdf8; }
@@ -71,23 +75,25 @@
 
   <div class="card">
     <h1>FitStep Boost</h1>
-    <p class="sub">Google Fit Steps Automation</p>
+    <p class="sub">Google Fit स्टेप्स ऑटोमेशन (सुरक्षित सिंक टूल)</p>
 
     <div id="loginSection">
-      <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit se Login Karein</button>
+      <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
     </div>
 
     <div id="appSection" style="display: none;">
       <div class="user-box">
-        Login Account:<br><b id="userEmailText"></b><br>
-        <button class="btn btn-logout" onclick="logout()">Sign Out</button>
+        <div class="user-label">लॉगिन अकाउंट</div>
+        <div id="userEmailText" class="user-email"></div>
+        <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
       </div>
 
-      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>Ads Dekhein (0 / 5)</button>
-      <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>Steps Sync Karein</button>
+      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+      <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
+      <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
     </div>
 
-    <div id="statusBox" class="status-text">Taiyaar... Kripya login karein.</div>
+    <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
   </div>
 
   <script>
@@ -130,11 +136,11 @@
       adsWatched = 0;
       document.getElementById("loginSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
-      document.getElementById("statusBox").innerHTML = "Sign out ho gaya. Dobara login karein.";
+      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
     }
 
     function fetchEmail() {
-      addLog("User profile load ho rahi hai...");
+      addLog("यूज़र प्रोफाइल लोड हो रही है...");
       fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: "Bearer " + accessToken }
       })
@@ -144,27 +150,27 @@
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
-        addLog("Account: <b>" + userEmail + "</b>");
+        addLog("अकाउंट: <b>" + userEmail + "</b>");
         verifyWhitelist(userEmail);
       })
-      .catch(e => addLog("Profile error: " + e.message));
+      .catch(e => addLog("प्रोफाइल लोड त्रुटि: " + e.message));
     }
 
     function verifyWhitelist(email) {
-      addLog("Admin anumati & App Version check ho raha hai...");
+      addLog("एडमिन अनुमति (Whitelist) व ऐप वर्ज़न चेक की जा रही है...");
       const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
         if (script.parentNode) script.parentNode.removeChild(script);
 
         if (data.allowed) {
-          addLog("✅ Anumati Swikrit (Approved)! Aap ads dekh sakte hain.");
+          addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>App Outdated:</b> Naya version " + data.requiredVersion + " uplabdh hai. Kripya naya APK install karein.");
-          alert("Aapka App version purana ho gaya hai! Kripya naya version update karein.");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न " + data.requiredVersion + " उपलब्ध है। कृपया नई APK इंस्टॉल करें।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
-          addLog("⏳ Anumati Lamvit (Pending) ya Blocked hai. Admin se sampark karein.");
+          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
         }
       };
 
@@ -177,25 +183,28 @@
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
-        alert("Mobile app bridge connect nahi hua.");
+        alert("मोबाइल ऐप ब्रिज कनेक्ट नहीं हुआ।");
       }
     }
 
     window.adRewardCompleted = function() {
       adsWatched++;
-      document.getElementById("adBtn").innerText = "Ads Dekhein (" + adsWatched + " / " + requiredAds + ")";
-      addLog("Ad safalta se dekha gaya (" + adsWatched + "/" + requiredAds + ")");
+      document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
+      document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
+      addLog("ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
-        document.getElementById("syncBtn").disabled = false;
-        addLog("🎉 5 ads pure ho gaye! Ab Steps Sync button dabayein.");
+        const syncBtn = document.getElementById("syncBtn");
+        syncBtn.disabled = false;
+        syncBtn.classList.add("active");
+        addLog("🎉 5 ऐड्स पूरे हो गए! अब 'स्टेप्स सिंक करें' बटन दबाएँ।");
       }
     };
 
     function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("Steps calculate ho rahe hain...");
+      addLog("स्टेप्स की गणना की जा रही है...");
 
       const totalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
@@ -229,13 +238,13 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + totalSteps + " Steps safalta se sync ho gaye!");
+          addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
           createSession(startTimeMillis, endTimeMillis, totalSteps);
         } else {
-          addLog("Sync error: API request fail ho gayi.");
+          addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
         }
       })
-      .catch(e => addLog("Network error: " + e.message));
+      .catch(e => addLog("नेटवर्क त्रुटि: " + e.message));
     }
 
     function createSession(start, end, steps) {
@@ -257,7 +266,7 @@
         })
       })
       .then(() => {
-        addLog("✅ Walk session record ho gaya.");
+        addLog("✅ वॉक सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
