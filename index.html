@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FitStep Tracker</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -109,6 +110,7 @@
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
 
+    let tokenClient;
     let accessToken = localStorage.getItem("fitstep_token") || null;
     let userEmail = localStorage.getItem("fitstep_email") || "";
     let adsWatched = 0;
@@ -122,24 +124,65 @@
       }
     }
 
-    // URL से टोकन एक्सट्रैक्ट करना
-    function extractToken() {
-      let hash = window.location.hash.substring(1);
-      if (!hash && window.location.search) {
-        hash = window.location.search.substring(1);
+    function initGsiClient() {
+      if (window.google && google.accounts && google.accounts.oauth2) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              accessToken = tokenResponse.access_token;
+              localStorage.setItem("fitstep_token", accessToken);
+              fetchEmail();
+            } else {
+              addLog("लॉगिन टोकन नहीं मिला। कृपया दोबारा प्रयास करें।");
+            }
+          }
+        });
+      } else {
+        setTimeout(initGsiClient, 200);
       }
-      if (hash) {
-        const params = new URLSearchParams(hash);
-        const token = params.get("access_token");
-        if (token) {
-          accessToken = token;
-          localStorage.setItem("fitstep_token", token);
-          window.history.replaceState(null, null, window.location.pathname);
-          return true;
-        }
-      }
-      return false;
     }
 
-    window.onload
-    
+    window.onload = function() {
+      initGsiClient();
+      if (accessToken) {
+        fetchEmail();
+      }
+    };
+
+    function login() {
+      addLog("Google लॉगिन खोला जा रहा है...");
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: "" });
+      } else {
+        addLog("Google सेवा लोड हो रही है, 2 सेकंड बाद दोबारा दबाएँ।");
+        initGsiClient();
+      }
+    }
+
+    function logout() {
+      accessToken = null;
+      userEmail = "";
+      adsWatched = 0;
+      localStorage.removeItem("fitstep_token");
+      localStorage.removeItem("fitstep_email");
+      document.getElementById("loginSection").style.display = "block";
+      document.getElementById("appSection").style.display = "none";
+      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
+    }
+
+    function fetchEmail() {
+      addLog("यूज़र प्रोफाइल लोड हो रही है...");
+      fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: "Bearer " + accessToken }
+      })
+      .then(r => {
+        if (!r.ok) throw new Error("पुराना टोकन अमान्य");
+        return r.json();
+      })
+      .then(info => {
+        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
+        localStorage.setItem("fitstep_email", userEmail);
+        document.getElementById
+        
