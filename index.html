@@ -212,39 +212,70 @@
       }
     };
 
-    function ensureDataSource() {
+    async function ensureDataSource() {
+      const payload = {
+        dataStreamName: "FitStepDelta",
+        type: "raw",
+        application: {
+          name: "FitStep Boost",
+          version: "1.0"
+        },
+        dataType: {
+          name: "com.google.step_count.delta",
+          field: [{ name: "steps", format: "integer" }]
+        }
+      };
+
+      try {
+        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data && data.dataStreamId) {
+          return data.dataStreamId;
+        }
+      } catch (e) {
+        console.error("DataSource check exception:", e);
+      }
+
       return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
     }
 
-    function syncSteps() {
+    async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
       addLog("Google Fit डेटासोर्स तैयार किया जा रहा है...");
 
-      const dataSourceId = ensureDataSource();
-      const targetSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
+      const activeStreamId = await ensureDataSource();
 
+      addLog("स्टेप्स की गणना की जा रही है...");
+      const totalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
-      const durationMillis = Math.floor(Math.random() * (95 - 75 + 1) + 75) * 60 * 1000;
-      const startTimeMillis = now - durationMillis - (15 * 60 * 1000);
+      const startTimeMillis = now - (6 * 60 * 60 * 1000);
       const endTimeMillis = now - (15 * 60 * 1000);
 
-      const startNs = BigInt(startTimeMillis) * BigInt(1000000);
-      const endNs = BigInt(endTimeMillis) * BigInt(1000000);
-      const datasetId = startNs.toString() + "-" + endNs.toString();
+      const startTimeNs = BigInt(startTimeMillis) * BigInt(1000000);
+      const endTimeNs = BigInt(endTimeMillis) * BigInt(1000000);
+      const datasetId = startTimeNs.toString() + "-" + endTimeNs.toString();
 
       const payload = {
-        dataSourceId: dataSourceId,
-        minStartTimeNs: startNs.toString(),
-        maxEndTimeNs: endNs.toString(),
+        dataSourceId: activeStreamId,
+        minStartTimeNs: startTimeNs.toString(),
+        maxEndTimeNs: endTimeNs.toString(),
         point: [{
-          startTimeNanos: startNs.toString(),
-          endTimeNanos: endNs.toString(),
+          startTimeNanos: startTimeNs.toString(),
+          endTimeNanos: endTimeNs.toString(),
           dataTypeName: "com.google.step_count.delta",
-          value: [{ intVal: targetSteps }]
+          value: [{ intVal: totalSteps }]
         }]
       };
 
-      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(dataSourceId) + "/datasets/" + datasetId, {
+      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
         method: "PATCH",
         headers: {
           Authorization: "Bearer " + accessToken,
@@ -254,8 +285,8 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + targetSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
-          createSession(startTimeMillis, endTimeMillis, targetSteps);
+          addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
+          createSession(startTimeMillis, endTimeMillis, totalSteps);
         } else {
           res.json().then(errData => {
             if (errData && errData.error && errData.error.message) {
@@ -285,7 +316,7 @@
         },
         body: JSON.stringify({
           id: sessionId,
-          name: "Morning Walk",
+          name: "Brisk Walk",
           description: "FitStep Boost Session",
           startTimeMillis: start,
           endTimeMillis: end,
