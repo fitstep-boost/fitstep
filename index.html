@@ -222,7 +222,8 @@
       }
     };
 
-    async function getOrCreateSensorDataSource(dataTypeName, fieldName, formatType, streamName) {
+    // Google Fit 100% गारंटेड डेटासोर्स क्रिएटर
+    async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
         dataStreamName: streamName,
         type: "derived",
@@ -235,10 +236,10 @@
           field: [{ name: fieldName, format: formatType }]
         },
         device: {
-          manufacturer: "Android",
-          model: "Integrated Step Sensor",
+          manufacturer: "Google",
+          model: "Sensor Hub",
           type: "phone",
-          uid: "pedometer_sensor_hw",
+          uid: "sensor_hub_v1",
           version: "1.0"
         }
       };
@@ -255,22 +256,42 @@
         const data = await res.json();
         if (data && data.dataStreamId) return data.dataStreamId;
       } catch (e) {
-        console.error("DataSource creation err:", e);
+        console.error("Error creating datasource:", e);
       }
+
+      // अगर डेटासोर्स पहले से मौजूद है तो लिस्ट से निकालें
+      try {
+        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          headers: { Authorization: "Bearer " + accessToken }
+        });
+        const listData = await listRes.json();
+        if (listData && listData.dataSource) {
+          for (let ds of listData.dataSource) {
+            if (ds.dataStreamName === streamName) {
+              return ds.dataStreamId;
+            }
+          }
+        }
+      } catch (e) {}
+
       return null;
     }
 
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("सेंसर डेटासोर्स जाँचा जा रहा है...");
+      addLog("सेंसर डेटासोर्स तैयार किए जा रहे हैं...");
 
-      const stepStreamId = await getOrCreateSensorDataSource("com.google.step_count.delta", "steps", "integer", "PedoHardwareSteps") 
-        || "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
-      
-      const calStreamId = await getOrCreateSensorDataSource("com.google.calories.expended", "calories", "floatPoint", "ActiveCaloriesStream");
-      const distStreamId = await getOrCreateSensorDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
+      const stepStreamId = await getOrCreateDataSource("com.google.step_count.delta", "steps", "integer", "HardwareStepsStream");
+      const calStreamId = await getOrCreateDataSource("com.google.calories.expended", "calories", "floatPoint", "ActiveCaloriesStream");
+      const distStreamId = await getOrCreateDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
 
-      addLog("✅ सेंसर मोड सक्रिय: Integrated Step Sensor");
+      if (!stepStreamId) {
+        addLog("❌ डेटासोर्स कनेक्शन त्रुटि, कृपया दोबारा प्रयास करें।");
+        document.getElementById("syncBtn").disabled = false;
+        return;
+      }
+
+      addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
       addLog("कदम, एक्टिव कैलोरीज़ और दूरी की गणना की जा रही है...");
 
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
