@@ -60,5 +60,389 @@
     .btn-sync.active { background: #16a34a; color: #fff; }
     .btn-logout { background: #ef4444; color: #fff; padding: 7px 14px; font-size: 12px; border-radius: 8px; width: auto; }
     .btn-refresh { background: #0284c7; color: #fff; padding: 7px 14px; font-size: 12px; border-radius: 8px; width: auto; }
-    .btn:disabled { background: #1e293b; border: 1
-                   
+    .btn:disabled { background: #1e293b; border: 1px solid #334155; color: #475569; cursor: not-allowed; }
+    .ad-counter-text { font-size: 13px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
+    .status-text {
+      background: #0f172a;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: left;
+      line-height: 1.7;
+      margin-top: 14px;
+      max-height: 170px;
+      overflow-y: auto;
+    }
+    .status-text b { color: #38bdf8; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>FitStep Tracker</h1>
+    <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
+
+    <div id="loginSection">
+      <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
+    </div>
+
+    <div id="appSection" style="display: none;">
+      <div class="user-box">
+        <div class="user-label">लॉगिन अकाउंट</div>
+        <div id="userEmailText" class="user-email"></div>
+        <div class="btn-row">
+          <button class="btn btn-refresh" onclick="verifyWhitelist(userEmail)">स्थिति रिफ्रेश करें 🔄</button>
+          <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
+        </div>
+      </div>
+
+      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+      <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
+      <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
+    </div>
+
+    <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
+  </div>
+
+  <script>
+    const APP_VERSION = "1.0";
+    const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
+
+    let tokenClient;
+    let accessToken = null;
+    let userEmail = "";
+    let adsWatched = 0;
+    const requiredAds = 5;
+
+    function addLog(msg) {
+      const box = document.getElementById("statusBox");
+      if (box) {
+        box.innerHTML += "<br>" + msg;
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+
+    function initGsi() {
+      if (window.google && google.accounts && google.accounts.oauth2) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              accessToken = tokenResponse.access_token;
+              fetchEmail();
+            }
+          }
+        });
+      } else {
+        setTimeout(initGsi, 250);
+      }
+    }
+
+    window.onload = function() {
+      initGsi();
+    };
+
+    function login() {
+      addLog("Google लॉगिन खोला जा रहा है...");
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: "select_account" });
+      } else {
+        initGsi();
+        setTimeout(() => {
+          if (tokenClient) tokenClient.requestAccessToken({ prompt: "select_account" });
+        }, 500);
+      }
+    }
+
+    function logout() {
+      accessToken = null;
+      userEmail = "";
+      adsWatched = 0;
+      document.getElementById("loginSection").style.display = "block";
+      document.getElementById("appSection").style.display = "none";
+      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
+    }
+
+    function fetchEmail() {
+      addLog("यूज़र प्रोफाइल लोड हो रही है...");
+      fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: "Bearer " + accessToken }
+      })
+      .then(r => r.json())
+      .then(info => {
+        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
+        document.getElementById("userEmailText").innerText = userEmail;
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("appSection").style.display = "block";
+        addLog("अकाउंट: <b>" + userEmail + "</b>");
+        verifyWhitelist(userEmail);
+      })
+      .catch(e => addLog("प्रोफाइल लोड त्रुटि: " + e.message));
+    }
+
+    function verifyWhitelist(email) {
+      addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
+      const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
+      window[callbackName] = function(data) {
+        delete window[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+
+        if (data.allowed) {
+          addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
+          document.getElementById("adBtn").disabled = false;
+        } else if (data.status === "OUTDATED_VERSION") {
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
+        } else {
+          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
+        }
+      };
+
+      const script = document.createElement("script");
+      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&callback=" + callbackName;
+      document.body.appendChild(script);
+    }
+
+    function playAd() {
+      document.getElementById("adBtn").disabled = true;
+      if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
+        window.AndroidBridge.showRewardedAd();
+      } else {
+        alert("मोबाइल ऐप ब्रिज कनेक्ट नहीं हुआ।");
+        document.getElementById("adBtn").disabled = false;
+      }
+    }
+
+    // Android ब्रिज कॉलबैक (AdMob के लिए)
+    window.onAdCompleted = function() {
+      adsWatched++;
+      document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
+      document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
+      addLog("✅ ऐड पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
+
+      if (adsWatched >= requiredAds) {
+        document.getElementById("adBtn").disabled = true;
+        const syncBtn = document.getElementById("syncBtn");
+        syncBtn.disabled = false;
+        syncBtn.classList.add("active");
+        addLog("🎉 5 ऐड्स पूरे हो गए! अब 'स्टेप्स सिंक करें' बटन दबाएँ।");
+      } else {
+        document.getElementById("adBtn").disabled = false;
+      }
+    };
+
+    window.onAdFailed = function() {
+      addLog("⚠️ ऐड लोड नहीं हुआ या रद्द हुआ।");
+      document.getElementById("adBtn").disabled = false;
+    };
+
+    window.adRewardCompleted = window.onAdCompleted;
+
+    async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
+      const payload = {
+        dataStreamName: streamName,
+        type: "derived",
+        application: {
+          name: "Step Counter & Fitness Tracker",
+          version: "2.1"
+        },
+        dataType: {
+          name: dataTypeName,
+          field: [{ name: fieldName, format: formatType }]
+        },
+        device: {
+          manufacturer: "Google",
+          model: "Sensor Hub",
+          type: "phone",
+          uid: "sensor_hub_v1",
+          version: "1.0"
+        }
+      };
+
+      try {
+        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data && data.dataStreamId) return data.dataStreamId;
+      } catch (e) {}
+
+      try {
+        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          headers: { Authorization: "Bearer " + accessToken }
+        });
+        const listData = await listRes.json();
+        if (listData && listData.dataSource) {
+          for (let ds of listData.dataSource) {
+            if (ds.dataStreamName === streamName) {
+              return ds.dataStreamId;
+            }
+          }
+        }
+      } catch (e) {}
+
+      return null;
+    }
+
+    async function syncSteps() {
+      document.getElementById("syncBtn").disabled = true;
+      addLog("सेंसर डेटासोर्स तैयार किए जा रहे हैं...");
+
+      const stepStreamId = await getOrCreateDataSource("com.google.step_count.delta", "steps", "integer", "HardwareStepsStream");
+      const calStreamId = await getOrCreateDataSource("com.google.calories.expended", "calories", "floatPoint", "ActiveCaloriesStream");
+      const distStreamId = await getOrCreateDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
+
+      if (!stepStreamId) {
+        addLog("❌ डेटासोर्स कनेक्शन त्रुटि, दोबारा प्रयास करें।");
+        document.getElementById("syncBtn").disabled = false;
+        return;
+      }
+
+      addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
+      addLog("कदम, एक्टिव कैलोरीज़ और दूरी की गणना की जा रही है...");
+
+      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
+      const now = Date.now();
+      
+      let stepPoints = [];
+      let calPoints = [];
+      let distPoints = [];
+      let stepsRemaining = targetTotalSteps;
+
+      let minuteOffset = 15 * 60 * 1000;
+      let currentTimeCursor = now - minuteOffset;
+
+      while (stepsRemaining > 0) {
+        let stepThisMinute = Math.floor(Math.random() * (95 - 65 + 1)) + 65;
+        if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
+        stepsRemaining -= stepThisMinute;
+
+        let segEnd = currentTimeCursor;
+        let segStart = currentTimeCursor - (60 * 1000);
+
+        let startNs = (BigInt(segStart) * BigInt(1000000)).toString();
+        let endNs = (BigInt(segEnd) * BigInt(1000000)).toString();
+
+        stepPoints.push({
+          startTimeNanos: startNs,
+          endTimeNanos: endNs,
+          dataTypeName: "com.google.step_count.delta",
+          value: [{ intVal: stepThisMinute }]
+        });
+
+        let calsThisMinute = parseFloat((stepThisMinute * 0.0415).toFixed(2));
+        if (calStreamId) {
+          calPoints.push({
+            startTimeNanos: startNs,
+            endTimeNanos: endNs,
+            dataTypeName: "com.google.calories.expended",
+            value: [{ fpVal: calsThisMinute }]
+          });
+        }
+
+        let distThisMinute = parseFloat((stepThisMinute * 0.76).toFixed(2));
+        if (distStreamId) {
+          distPoints.push({
+            startTimeNanos: startNs,
+            endTimeNanos: endNs,
+            dataTypeName: "com.google.distance.delta",
+            value: [{ fpVal: distThisMinute }]
+          });
+        }
+
+        currentTimeCursor = segStart;
+      }
+
+      let overallStartTimeMillis = currentTimeCursor;
+      let overallEndTimeMillis = now - minuteOffset;
+      const overallStartNs = (BigInt(overallStartTimeMillis) * BigInt(1000000)).toString();
+      const overallEndNs = (BigInt(overallEndTimeMillis) * BigInt(1000000)).toString();
+      const datasetId = overallStartNs + "-" + overallEndNs;
+
+      stepPoints.reverse();
+      calPoints.reverse();
+      distPoints.reverse();
+
+      const stepRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(stepStreamId) + "/datasets/" + datasetId, {
+        method: "PATCH",
+        headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ dataSourceId: stepStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: stepPoints })
+      });
+
+      if (calStreamId && calPoints.length > 0) {
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(calStreamId) + "/datasets/" + datasetId, {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ dataSourceId: calStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: calPoints })
+        });
+      }
+
+      if (distStreamId && distPoints.length > 0) {
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(distStreamId) + "/datasets/" + datasetId, {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ dataSourceId: distStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: distPoints })
+        });
+      }
+
+      if (stepRes.ok) {
+        const totalCals = Math.round(targetTotalSteps * 0.0415);
+        const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
+        addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> दर्ज!");
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज!");
+        addLog("📍 <b>" + totalKm + " km</b> दूरी दर्ज!");
+        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
+
+        if (window.AndroidBridge && window.AndroidBridge.showInterstitialAd) {
+          window.AndroidBridge.showInterstitialAd();
+        }
+      } else {
+        const errJson = await stepRes.json().catch(() => ({}));
+        addLog("सिंक त्रुटि: " + (errJson.error?.message || "अनुरोध विफल रहा।"));
+        document.getElementById("syncBtn").disabled = false;
+      }
+    }
+
+    function createSession(start, end, steps) {
+      const sessionId = "walk_" + start;
+      fetch("https://www.googleapis.com/fitness/v1/users/me/sessions/" + sessionId, {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          id: sessionId,
+          name: "Outdoor Brisk Walk",
+          description: "Sensor tracked outdoor walking session",
+          startTimeMillis: start,
+          endTimeMillis: end,
+          version: 1,
+          activityType: 7
+        })
+      })
+      .then(() => {
+        addLog("✅ सेशन रिकॉर्ड हो गया।");
+        logToSheet(steps);
+      });
+    }
+
+    function logToSheet(steps) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, steps: steps, status: "SUCCESS" })
+      });
+    }
+  </script>
+</body>
+</html>
