@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FitStep Tracker</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -110,7 +109,6 @@
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
 
-    let tokenClient;
     let accessToken = localStorage.getItem("fitstep_token") || null;
     let userEmail = localStorage.getItem("fitstep_email") || "";
     let adsWatched = 0;
@@ -124,59 +122,41 @@
       }
     }
 
-    // URL हैश से टोकन पढ़ना (रीडायरेक्ट के बाद)
-    function parseTokenFromUrl() {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const token = params.get("access_token");
-      if (token) {
-        accessToken = token;
-        localStorage.setItem("fitstep_token", token);
-        window.history.replaceState(null, null, window.location.pathname);
-        return true;
+    // URL के हैश या सर्च पैरामीटर से टोकन पढ़ना
+    function extractToken() {
+      let hash = window.location.hash.substring(1);
+      if (!hash && window.location.search) {
+        hash = window.location.search.substring(1);
+      }
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const token = params.get("access_token");
+        if (token) {
+          accessToken = token;
+          localStorage.setItem("fitstep_token", token);
+          window.history.replaceState(null, null, window.location.pathname);
+          return true;
+        }
       }
       return false;
     }
 
     window.onload = function() {
-      if (parseTokenFromUrl() || accessToken) {
+      if (extractToken() || accessToken) {
         fetchEmail();
       }
-
-      function initClient() {
-        if (window.google && google.accounts && google.accounts.oauth2) {
-          tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
-            callback: (tokenResponse) => {
-              if (tokenResponse && tokenResponse.access_token) {
-                accessToken = tokenResponse.access_token;
-                localStorage.setItem("fitstep_token", accessToken);
-                fetchEmail();
-              }
-            }
-          });
-        } else {
-          setTimeout(initClient, 300);
-        }
-      }
-      initClient();
     };
 
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
-      if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: "select_account" });
-      } else {
-        // फॉलबैक डायरेक्ट रीडायरेक्ट
-        const redirectUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
-          "client_id=" + encodeURIComponent(CLIENT_ID) +
-          "&redirect_uri=" + encodeURIComponent(window.location.origin + window.location.pathname) +
-          "&response_type=token" +
-          "&scope=" + encodeURIComponent("https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid") +
-          "&prompt=select_account";
-        window.location.href = redirectUrl;
-      }
+      const redirectUri = window.location.origin + window.location.pathname;
+      const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
+        "client_id=" + encodeURIComponent(CLIENT_ID) +
+        "&redirect_uri=" + encodeURIComponent(redirectUri) +
+        "&response_type=token" +
+        "&scope=" + encodeURIComponent("https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid") +
+        "&prompt=select_account";
+      window.location.replace(authUrl);
     }
 
     function logout() {
@@ -196,7 +176,7 @@
         headers: { Authorization: "Bearer " + accessToken }
       })
       .then(r => {
-        if (!r.ok) throw new Error("टोकन अमान्य या समाप्त हो गया");
+        if (!r.ok) throw new Error("टोकन एक्सपायर हो गया");
         return r.json();
       })
       .then(info => {
@@ -209,7 +189,7 @@
         verifyWhitelist(userEmail);
       })
       .catch(e => {
-        addLog("सत्र समाप्त। दोबारा लॉगिन करें: " + e.message);
+        addLog("सत्र समाप्त। दोबारा लॉगिन करें।");
         logout();
       });
     }
@@ -247,12 +227,11 @@
       }
     }
 
-    // Android ब्रिज कॉलबैक
     window.onAdCompleted = function() {
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("✅ ऐड सफलतापूर्वक पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("✅ ऐड पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -266,11 +245,9 @@
     };
 
     window.onAdFailed = function() {
-      addLog("⚠️ ऐड लोड नहीं हुआ या रद्द हो गया।");
+      addLog("⚠️ ऐड लोड नहीं हुआ या रद्द हुआ।");
       document.getElementById("adBtn").disabled = false;
     };
-
-    window.adRewardCompleted = window.onAdCompleted;
 
     async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
@@ -304,9 +281,7 @@
         });
         const data = await res.json();
         if (data && data.dataStreamId) return data.dataStreamId;
-      } catch (e) {
-        console.error("Error creating datasource:", e);
-      }
+      } catch (e) {}
 
       try {
         const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
@@ -430,11 +405,10 @@
         const totalCals = Math.round(targetTotalSteps * 0.0415);
         const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
         addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
-        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ रिकॉर्ड हुईं।");
-        addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज!");
+        addLog("📍 <b>" + totalKm + " km</b> दूरी दर्ज!");
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
 
-        // सिंक के बाद फुल स्क्रीन ऐड
         if (window.AndroidBridge && window.AndroidBridge.showInterstitialAd) {
           window.AndroidBridge.showInterstitialAd();
         }
@@ -464,7 +438,7 @@
         })
       })
       .then(() => {
-        addLog("✅ 'Outdoor Brisk Walk' सेशन रिकॉर्ड हो गया।");
+        addLog("✅ सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
