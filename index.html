@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FitStep Tracker</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -109,8 +110,9 @@
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
 
-    let accessToken = localStorage.getItem("fitstep_token") || null;
-    let userEmail = localStorage.getItem("fitstep_email") || "";
+    let tokenClient;
+    let accessToken = null;
+    let userEmail = "";
     let adsWatched = 0;
     const requiredAds = 5;
 
@@ -122,47 +124,43 @@
       }
     }
 
-    // URL हैश से टोकन निकालना (Google Login के बाद)
-    function checkUrlForToken() {
-      const hash = window.location.hash.substring(1);
-      if (hash) {
-        const params = new URLSearchParams(hash);
-        const token = params.get("access_token");
-        if (token) {
-          accessToken = token;
-          localStorage.setItem("fitstep_token", token);
-          window.history.replaceState(null, null, window.location.pathname);
-          return true;
-        }
+    function initGsi() {
+      if (window.google && google.accounts && google.accounts.oauth2) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              accessToken = tokenResponse.access_token;
+              fetchEmail();
+            }
+          }
+        });
+      } else {
+        setTimeout(initGsi, 250);
       }
-      return false;
     }
 
     window.onload = function() {
-      if (checkUrlForToken() || accessToken) {
-        fetchEmail();
-      }
+      initGsi();
     };
 
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
-      // सीधा और सुरक्षित OAuth यूआरएल जो कभी 400 एरर नहीं देता
-      const targetUrl = window.location.href.split('#')[0];
-      const authUrl = "https://accounts.google.com/o/oauth2/auth?" +
-        "client_id=" + encodeURIComponent(CLIENT_ID) +
-        "&redirect_uri=" + encodeURIComponent(targetUrl) +
-        "&response_type=token" +
-        "&scope=" + encodeURIComponent("https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid") +
-        "&prompt=select_account";
-      window.location.href = authUrl;
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: "select_account" });
+      } else {
+        initGsi();
+        setTimeout(() => {
+          if (tokenClient) tokenClient.requestAccessToken({ prompt: "select_account" });
+        }, 500);
+      }
     }
 
     function logout() {
       accessToken = null;
       userEmail = "";
       adsWatched = 0;
-      localStorage.removeItem("fitstep_token");
-      localStorage.removeItem("fitstep_email");
       document.getElementById("loginSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
       document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
@@ -173,23 +171,16 @@
       fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: "Bearer " + accessToken }
       })
-      .then(r => {
-        if (!r.ok) throw new Error("टोकन अमान्य");
-        return r.json();
-      })
+      .then(r => r.json())
       .then(info => {
         userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
-        localStorage.setItem("fitstep_email", userEmail);
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
         addLog("अकाउंट: <b>" + userEmail + "</b>");
         verifyWhitelist(userEmail);
       })
-      .catch(e => {
-        addLog("लॉगिन सत्र समाप्त। कृपया दोबारा लॉगिन करें।");
-        logout();
-      });
+      .catch(e => addLog("प्रोफाइल लोड त्रुटि: " + e.message));
     }
 
     function verifyWhitelist(email) {
@@ -203,8 +194,8 @@
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ ऐप वर्ज़न पुराना है।");
-          alert("ऐप वर्ज़न पुराना हो चुका है!");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
           addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
         }
@@ -246,6 +237,8 @@
       addLog("⚠️ ऐड लोड नहीं हुआ या रद्द हुआ।");
       document.getElementById("adBtn").disabled = false;
     };
+
+    window.adRewardCompleted = window.onAdCompleted;
 
     async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
@@ -393,4 +386,62 @@
 
       if (distStreamId && distPoints.length > 0) {
         fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(distStreamId) + "/datasets/" + datasetId, {
-          
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ dataSourceId: distStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: distPoints })
+        });
+      }
+
+      if (stepRes.ok) {
+        const totalCals = Math.round(targetTotalSteps * 0.0415);
+        const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
+        addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> दर्ज!");
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज!");
+        addLog("📍 <b>" + totalKm + " km</b> दूरी दर्ज!");
+        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
+
+        if (window.AndroidBridge && window.AndroidBridge.showInterstitialAd) {
+          window.AndroidBridge.showInterstitialAd();
+        }
+      } else {
+        const errJson = await stepRes.json().catch(() => ({}));
+        addLog("सिंक त्रुटि: " + (errJson.error?.message || "अनुरोध विफल रहा।"));
+        document.getElementById("syncBtn").disabled = false;
+      }
+    }
+
+    function createSession(start, end, steps) {
+      const sessionId = "walk_" + start;
+      fetch("https://www.googleapis.com/fitness/v1/users/me/sessions/" + sessionId, {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          id: sessionId,
+          name: "Outdoor Brisk Walk",
+          description: "Sensor tracked outdoor walking session",
+          startTimeMillis: start,
+          endTimeMillis: end,
+          version: 1,
+          activityType: 7
+        })
+      })
+      .then(() => {
+        addLog("✅ सेशन रिकॉर्ड हो गया।");
+        logToSheet(steps);
+      });
+    }
+
+    function logToSheet(steps) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, steps: steps, status: "SUCCESS" })
+      });
+    }
+  </script>
+</body>
+</html>
