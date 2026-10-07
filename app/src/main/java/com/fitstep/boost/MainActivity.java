@@ -1,13 +1,13 @@
 package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -31,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String PLACEMENT_REWARDED = "BP_Rewarded_Android";
     private static final String PLACEMENT_INTERSTITIAL = "BP_Interstitial_Android";
     private static final String PLACEMENT_BANNER = "BP_Banner_Android";
-    private static final boolean TEST_MODE = false;
+    private static final boolean TEST_MODE = true;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -57,21 +57,23 @@ public class MainActivity extends AppCompatActivity {
             s.setDatabaseEnabled(true);
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
-            s.setJavaScriptCanOpenWindowsAutomatically(true);
+            s.setJavaScriptCanOpenWindowsAutomatically(false);
             s.setSupportMultipleWindows(false);
 
-            // Google OAuth fix
+            // Google OAuth के लिए सामान्य User-Agent
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
+            // कुकीज़ चालू रखें ताकि टोकन सुरक्षित रहे
             CookieManager cm = CookieManager.getInstance();
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
             webView.setWebViewClient(new WebViewClient() {
                 @Override
-                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                    return false;
+                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                    view.loadUrl(url);
+                    return true;
                 }
 
                 @Override
@@ -83,11 +85,14 @@ public class MainActivity extends AppCompatActivity {
 
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+
+            // लाइव वेब ऐप लोड करें
             webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
+            // Unity Ads इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
@@ -119,12 +124,16 @@ public class MainActivity extends AppCompatActivity {
                             rootLayout.addView(v, p);
                         }
                     }
+
                     @Override
                     public void onBannerFailedToLoad(BannerView v, BannerErrorInfo err) {}
+
                     @Override
                     public void onBannerClick(BannerView v) {}
+
                     @Override
                     public void onBannerLeftApplication(BannerView v) {}
+
                     @Override
                     public void onBannerShown(BannerView v) {}
                 });
@@ -136,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class WebAppInterface {
+
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
@@ -143,15 +153,22 @@ public class MainActivity extends AppCompatActivity {
                     UnityAds.show(MainActivity.this, PLACEMENT_REWARDED, new IUnityAdsShowListener() {
                         @Override
                         public void onUnityAdsShowFailure(String id, UnityAds.UnityAdsShowError err, String msg) {
-                            if (webView != null) webView.evaluateJavascript("javascript:if(window.onAdFailed) window.onAdFailed();", null);
+                            if (webView != null) {
+                                webView.evaluateJavascript("javascript:if(window.onAdFailed) window.onAdFailed();", null);
+                            }
                         }
+
                         @Override
                         public void onUnityAdsShowStart(String id) {}
+
                         @Override
                         public void onUnityAdsShowClick(String id) {}
+
                         @Override
                         public void onUnityAdsShowComplete(String id, UnityAds.UnityAdsShowCompletionState state) {
-                            if (webView != null) webView.evaluateJavascript("javascript:if(window.onAdCompleted) window.onAdCompleted();", null);
+                            if (webView != null) {
+                                webView.evaluateJavascript("javascript:if(window.onAdCompleted) window.onAdCompleted();", null);
+                            }
                         }
                     });
                 } catch (Exception e) {
@@ -167,10 +184,13 @@ public class MainActivity extends AppCompatActivity {
                     UnityAds.show(MainActivity.this, PLACEMENT_INTERSTITIAL, new IUnityAdsShowListener() {
                         @Override
                         public void onUnityAdsShowFailure(String id, UnityAds.UnityAdsShowError err, String msg) {}
+
                         @Override
                         public void onUnityAdsShowStart(String id) {}
+
                         @Override
                         public void onUnityAdsShowClick(String id) {}
+
                         @Override
                         public void onUnityAdsShowComplete(String id, UnityAds.UnityAdsShowCompletionState state) {}
                     });
