@@ -27,7 +27,6 @@ public class MainActivity extends AppCompatActivity {
     private WebView mainWebView;
     private RewardedAd mRewardedAd;
     private boolean isAdLoading = false;
-    private boolean showAdWhenLoaded = false;
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
@@ -102,47 +101,14 @@ public class MainActivity extends AppCompatActivity {
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                 mRewardedAd = null;
                 isAdLoading = false;
-                if (showAdWhenLoaded) {
-                    showAdWhenLoaded = false;
-                    runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob एरर: " + loadAdError.getMessage() + " (Code: " + loadAdError.getCode() + ")');", null);
-                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                    });
-                }
             }
 
             @Override
             public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
                 mRewardedAd = rewardedAd;
                 isAdLoading = false;
-                if (showAdWhenLoaded) {
-                    showAdWhenLoaded = false;
-                    runOnUiThread(() -> showAdNow());
-                }
             }
         });
-    }
-
-    private void showAdNow() {
-        if (mRewardedAd != null) {
-            mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
-                @Override
-                public void onAdDismissedFullScreenContent() {
-                    mRewardedAd = null;
-                    loadRewardedAd();
-                }
-
-                @Override
-                public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
-                    mRewardedAd = null;
-                    loadRewardedAd();
-                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                }
-            });
-            mRewardedAd.show(MainActivity.this, rewardItem -> {
-                mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
-            });
-        }
     }
 
     public class WebAppInterface {
@@ -150,11 +116,24 @@ public class MainActivity extends AppCompatActivity {
         public void showRewardedAd() {
             runOnUiThread(() -> {
                 if (mRewardedAd != null) {
-                    showAdNow();
+                    mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        @Override
+                        public void onAdDismissedFullScreenContent() {
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+
+                        @Override
+                        public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+                    });
+                    mRewardedAd.show(MainActivity.this, rewardItem -> {
+                        mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
+                    });
                 } else {
-                    showAdWhenLoaded = true;
                     loadRewardedAd();
-                    mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड बैकग्राउंड से लाया जा रहा है, 2 सेकंड में खुलेगा...');", null);
                 }
             });
         }
