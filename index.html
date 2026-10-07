@@ -97,7 +97,8 @@
         </div>
       </div>
 
-      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+      <!-- बटन हमेशा एक्टिव रहेगा ताकि क्लिक सीधा AdMob को जाए -->
+      <button id="adBtn" class="btn btn-ad" onclick="playAd()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
       <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
       <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
     </div>
@@ -120,12 +121,6 @@
       const box = document.getElementById("statusBox");
       box.innerHTML += "<br>" + msg;
       box.scrollTop = box.scrollHeight;
-    }
-
-    function enableAdButton() {
-      if (adsWatched < requiredAds) {
-        document.getElementById("adBtn").disabled = false;
-      }
     }
 
     window.onload = function() {
@@ -181,12 +176,16 @@
 
         if (data.allowed) {
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          document.getElementById("adBtn").disabled = false;
+          const adBtn = document.getElementById("adBtn");
+          if (adsWatched < requiredAds) {
+            adBtn.disabled = false;
+          }
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
-          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
+          addLog("❌ ऐप वर्ज़न पुराना है।");
+          alert("ऐप वर्ज़न पुराना है! कृपया अपडेट करें।");
         } else {
-          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
+          addLog("⏳ अनुमति लंबित (Pending)।");
+          document.getElementById("adBtn").disabled = true;
         }
       };
 
@@ -196,12 +195,11 @@
     }
 
     function playAd() {
-      document.getElementById("adBtn").disabled = true;
+      addLog("🎬 ऐड दिखाने का अनुरोध भेजा गया...");
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
         alert("मोबाइल ऐप ब्रिज कनेक्ट नहीं हुआ।");
-        document.getElementById("adBtn").disabled = false;
       }
     }
 
@@ -209,7 +207,7 @@
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("✅ ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("✅ ऐड सफलतापूर्वक पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -217,8 +215,6 @@
         syncBtn.disabled = false;
         syncBtn.classList.add("active");
         addLog("🎉 5 ऐड्स पूरे हो गए! अब 'स्टेप्स सिंक करें' बटन दबाएँ।");
-      } else {
-        document.getElementById("adBtn").disabled = false;
       }
     };
 
