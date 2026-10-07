@@ -97,8 +97,7 @@
         </div>
       </div>
 
-      <!-- बटन हमेशा एक्टिव रहेगा ताकि क्लिक सीधा AdMob को जाए -->
-      <button id="adBtn" class="btn btn-ad" onclick="playAd()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
       <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
       <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
     </div>
@@ -157,7 +156,7 @@
       })
       .then(r => r.json())
       .then(info => {
-        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
+        userEmail = info.email;
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
@@ -176,16 +175,12 @@
 
         if (data.allowed) {
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          const adBtn = document.getElementById("adBtn");
-          if (adsWatched < requiredAds) {
-            adBtn.disabled = false;
-          }
+          document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ ऐप वर्ज़न पुराना है।");
-          alert("ऐप वर्ज़न पुराना है! कृपया अपडेट करें।");
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
         } else {
-          addLog("⏳ अनुमति लंबित (Pending)।");
-          document.getElementById("adBtn").disabled = true;
+          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
         }
       };
 
@@ -195,7 +190,6 @@
     }
 
     function playAd() {
-      addLog("🎬 ऐड दिखाने का अनुरोध भेजा गया...");
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
@@ -207,7 +201,7 @@
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("✅ ऐड सफलतापूर्वक पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -218,120 +212,39 @@
       }
     };
 
-    async function ensureDataSource() {
-      try {
-        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
-          headers: { Authorization: "Bearer " + accessToken }
-        });
-        const listData = await listRes.json();
-        if (listData && listData.dataSource) {
-          for (let ds of listData.dataSource) {
-            if (ds.dataStreamName === "FitStepBoostSteps" || ds.dataType.name === "com.google.step_count.delta") {
-              return ds.dataStreamId;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("DataSource check error:", err);
-      }
-
-      const payload = {
-        dataStreamName: "FitStepBoostSteps",
-        type: "derived",
-        application: {
-          name: "FitStep Boost",
-          version: "1.0"
-        },
-        dataType: {
-          name: "com.google.step_count.delta",
-          field: [{ name: "steps", format: "integer" }]
-        },
-        device: {
-          manufacturer: "FitStep",
-          model: "StepSensor",
-          type: "phone",
-          uid: "fitstep_sensor_v1",
-          version: "1.0"
-        }
-      };
-
-      try {
-        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + accessToken,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        if (data && data.dataStreamId) {
-          return data.dataStreamId;
-        }
-      } catch (e) {
-        console.error("DataSource create exception:", e);
-      }
-
+    function ensureDataSource() {
       return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
     }
 
-    async function syncSteps() {
+    function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("Google Fit डेटासोर्स जाँचा जा रहा है...");
+      addLog("Google Fit डेटासोर्स तैयार किया जा रहा है...");
 
-      const activeStreamId = await ensureDataSource();
+      const dataSourceId = ensureDataSource();
+      const targetSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
 
-      addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
-      
-      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
-      
-      let points = [];
-      let stepsRemaining = targetTotalSteps;
-      let minuteOffset = 15 * 60 * 1000;
-      let currentTimeCursor = now - minuteOffset;
+      const durationMillis = Math.floor(Math.random() * (95 - 75 + 1) + 75) * 60 * 1000;
+      const startTimeMillis = now - durationMillis - (15 * 60 * 1000);
+      const endTimeMillis = now - (15 * 60 * 1000);
 
-      while (stepsRemaining > 0) {
-        let stepThisMinute = Math.floor(Math.random() * (100 - 60 + 1)) + 60;
-        if (stepsRemaining < stepThisMinute) {
-          stepThisMinute = stepsRemaining;
-        }
-        stepsRemaining -= stepThisMinute;
+      const startNs = BigInt(startTimeMillis) * BigInt(1000000);
+      const endNs = BigInt(endTimeMillis) * BigInt(1000000);
+      const datasetId = startNs.toString() + "-" + endNs.toString();
 
-        let segEnd = currentTimeCursor;
-        let segStart = currentTimeCursor - (60 * 1000);
-
-        let startNs = BigInt(segStart) * BigInt(1000000);
-        let endNs = BigInt(segEnd) * BigInt(1000000);
-
-        points.push({
+      const payload = {
+        dataSourceId: dataSourceId,
+        minStartTimeNs: startNs.toString(),
+        maxEndTimeNs: endNs.toString(),
+        point: [{
           startTimeNanos: startNs.toString(),
           endTimeNanos: endNs.toString(),
           dataTypeName: "com.google.step_count.delta",
-          value: [{ intVal: stepThisMinute }]
-        });
-
-        currentTimeCursor = segStart;
-      }
-
-      let overallStartTimeMillis = currentTimeCursor;
-      let overallEndTimeMillis = now - minuteOffset;
-
-      const overallStartNs = BigInt(overallStartTimeMillis) * BigInt(1000000);
-      const overallEndNs = BigInt(overallEndTimeMillis) * BigInt(1000000);
-      const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
-
-      points.reverse();
-
-      const payload = {
-        dataSourceId: activeStreamId,
-        minStartTimeNs: overallStartNs.toString(),
-        maxEndTimeNs: overallEndNs.toString(),
-        point: points
+          value: [{ intVal: targetSteps }]
+        }]
       };
 
-      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
+      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(dataSourceId) + "/datasets/" + datasetId, {
         method: "PATCH",
         headers: {
           Authorization: "Bearer " + accessToken,
@@ -341,8 +254,8 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + targetTotalSteps + " स्टेप्स प्रति-मिनट वॉक के साथ सिंक हो गए!");
-          createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
+          addLog("✅ " + targetSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
+          createSession(startTimeMillis, endTimeMillis, targetSteps);
         } else {
           res.json().then(errData => {
             if (errData && errData.error && errData.error.message) {
@@ -372,7 +285,7 @@
         },
         body: JSON.stringify({
           id: sessionId,
-          name: "Brisk Walk",
+          name: "Morning Walk",
           description: "FitStep Boost Session",
           startTimeMillis: start,
           endTimeMillis: end,
