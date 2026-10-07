@@ -2,7 +2,6 @@ package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.os.Message;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -57,10 +56,7 @@ public class MainActivity extends AppCompatActivity {
             s.setDatabaseEnabled(true);
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
-            s.setJavaScriptCanOpenWindowsAutomatically(true);
-            s.setSupportMultipleWindows(true);
 
-            // Google OAuth को सामान्य ब्राउज़र दिखाने के लिए
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -68,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
+            // मानक वेबव्यू व्यवहार—किसी भी रीडायरेक्ट को ब्लॉक न करें
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String url) {
@@ -76,53 +73,15 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            // Google Identity Services पॉपअप डायलॉग हैंडलर
-            webView.setWebChromeClient(new WebChromeClient() {
-                @Override
-                public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-                    WebView popupWebView = new WebView(MainActivity.this);
-                    WebSettings popupSettings = popupWebView.getSettings();
-                    popupSettings.setJavaScriptEnabled(true);
-                    popupSettings.setDomStorageEnabled(true);
-                    popupSettings.setUserAgentString(s.getUserAgentString());
-
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(popupWebView, true);
-
-                    popupWebView.setWebViewClient(new WebViewClient() {
-                        @Override
-                        public void onPageFinished(WebView v, String url) {
-                            super.onPageFinished(v, url);
-                            CookieManager.getInstance().flush();
-                        }
-                    });
-
-                    popupWebView.setWebChromeClient(new WebChromeClient() {
-                        @Override
-                        public void onCloseWindow(WebView window) {
-                            rootLayout.removeView(window);
-                        }
-                    });
-
-                    popupWebView.setLayoutParams(new FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT));
-
-                    rootLayout.addView(popupWebView);
-
-                    WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
-                    transport.setWebView(popupWebView);
-                    resultMsg.sendToTarget();
-                    return true;
-                }
-            });
-
+            webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+
             webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // बैनर लेआउट लोड
+            // बैनर ऐड सीधे लेआउट में जोड़ें
             loadBottomBanner();
 
             // Unity Ads इनिशियलाइज़ेशन
