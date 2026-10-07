@@ -10,7 +10,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.unity3d.ads.UnityAds;
@@ -24,7 +24,7 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private BannerView bottomBanner;
-    private FrameLayout rootLayout;
+    private LinearLayout rootLayout;
 
     private static final String UNITY_GAME_ID = "800391367";
     private static final String PLACEMENT_REWARDED = "BP_Rewarded_Android";
@@ -38,17 +38,18 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         try {
-            rootLayout = new FrameLayout(this);
+            // वर्टिकल लेआउट: ऊपर वेबव्यू पूरा स्पेस लेगा, नीचे बैनर रहेगा
+            rootLayout = new LinearLayout(this);
+            rootLayout.setOrientation(LinearLayout.VERTICAL);
             rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT));
 
             webView = new WebView(this);
-            FrameLayout.LayoutParams webViewParams = new FrameLayout.LayoutParams(
+            LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT);
-            webViewParams.bottomMargin = (int) (52 * getResources().getDisplayMetrics().density);
-            webView.setLayoutParams(webViewParams);
+                    0, 1.0f);
+            webView.setLayoutParams(webParams);
 
             WebSettings s = webView.getSettings();
             s.setJavaScriptEnabled(true);
@@ -57,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
 
-            // Chrome User Agent ताकि Google लॉगिन ब्लॉक न करे
+            // Google OAuth के लिए मानक Chrome एजेंट
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -65,35 +66,21 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
-            // साधारण और सुरक्षित WebViewClient
-            webView.setWebViewClient(new WebViewClient() {
-                @Override
-                public void onPageFinished(WebView view, String url) {
-                    super.onPageFinished(view, url);
-                    CookieManager.getInstance().flush();
-                }
-            });
-
+            // पुरानी ऐप की तरह साधारण और साफ़ क्लाइंट
+            webView.setWebViewClient(new WebViewClient());
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
-
-            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // बैनर ऐड लोड करना
-            setupBottomBanner();
+            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
-            // Unity Ads इनिशियलाइज़ेशन
+            // Unity SDK इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
-                    runOnUiThread(() -> {
-                        if (bottomBanner != null) {
-                            bottomBanner.load();
-                        }
-                    });
+                    runOnUiThread(() -> loadBanner());
                 }
 
                 @Override
@@ -105,14 +92,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupBottomBanner() {
+    private void loadBanner() {
         try {
+            if (bottomBanner != null) return;
             bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-            FrameLayout.LayoutParams bannerParams = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            bannerParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            rootLayout.addView(bottomBanner, bannerParams);
+            LinearLayout.LayoutParams bannerParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    (int) (50 * getResources().getDisplayMetrics().density));
+            bannerParams.gravity = Gravity.CENTER_HORIZONTAL;
+            bottomBanner.setLayoutParams(bannerParams);
 
             bottomBanner.setListener(new BannerView.IListener() {
                 @Override
@@ -126,6 +114,9 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onBannerShown(BannerView bannerAdView) {}
             });
+
+            rootLayout.addView(bottomBanner);
+            bottomBanner.load();
         } catch (Exception e) {
             e.printStackTrace();
         }
