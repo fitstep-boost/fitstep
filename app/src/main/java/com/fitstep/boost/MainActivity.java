@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
             FrameLayout.LayoutParams webViewParams = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
-            webViewParams.bottomMargin = (int) (52 * getResources().getDisplayMetrics().density);
+            webViewParams.bottomMargin = (int) (50 * getResources().getDisplayMetrics().density);
             webView.setLayoutParams(webViewParams);
 
             WebSettings s = webView.getSettings();
@@ -57,6 +57,7 @@ public class MainActivity extends AppCompatActivity {
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
 
+            // Google OAuth को अनुमति देने के लिए मानक User-Agent
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -64,7 +65,6 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
-            // मानक वेबव्यू व्यवहार—किसी भी रीडायरेक्ट को ब्लॉक न करें
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String url) {
@@ -81,15 +81,17 @@ public class MainActivity extends AppCompatActivity {
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // बैनर ऐड सीधे लेआउट में जोड़ें
-            loadBottomBanner();
+            // बैनर व्यू सेटअप
+            setupBottomBanner();
 
             // Unity Ads इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
                     runOnUiThread(() -> {
-                        if (bottomBanner != null) bottomBanner.load();
+                        if (bottomBanner != null) {
+                            bottomBanner.load();
+                        }
                     });
                 }
 
@@ -102,14 +104,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void loadBottomBanner() {
+    private void setupBottomBanner() {
         try {
             bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-            FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams bannerParams = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
-            p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            rootLayout.addView(bottomBanner, p);
+            bannerParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            rootLayout.addView(bottomBanner, bannerParams);
+
+            bottomBanner.setListener(new BannerView.IListener() {
+                @Override
+                public void onBannerLoaded(BannerView bannerAdView) {}
+                @Override
+                public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
+                @Override
+                public void onBannerClick(BannerView bannerAdView) {}
+                @Override
+                public void onBannerLeftApplication(BannerView bannerAdView) {}
+                @Override
+                public void onBannerShown(BannerView bannerAdView) {}
+            });
         } catch (Exception e) {
             e.printStackTrace();
         }
