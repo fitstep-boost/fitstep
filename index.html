@@ -122,6 +122,12 @@
       box.scrollTop = box.scrollHeight;
     }
 
+    function enableAdButton() {
+      if (adsWatched < requiredAds) {
+        document.getElementById("adBtn").disabled = false;
+      }
+    }
+
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -190,11 +196,12 @@
     }
 
     function playAd() {
-      addLog("⏳ AdMob से ऐड लोड किया जा रहा है...");
+      document.getElementById("adBtn").disabled = true;
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
         alert("मोबाइल ऐप ब्रिज कनेक्ट नहीं हुआ।");
+        document.getElementById("adBtn").disabled = false;
       }
     }
 
@@ -210,6 +217,8 @@
         syncBtn.disabled = false;
         syncBtn.classList.add("active");
         addLog("🎉 5 ऐड्स पूरे हो गए! अब 'स्टेप्स सिंक करें' बटन दबाएँ।");
+      } else {
+        document.getElementById("adBtn").disabled = false;
       }
     };
 
@@ -277,7 +286,6 @@
 
       const activeStreamId = await ensureDataSource();
 
-      addLog("डेटासोर्स कनेक्टेड: <b>" + activeStreamId.split(":")[0] + "...</b>");
       addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
       
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
