@@ -122,6 +122,12 @@
       box.scrollTop = box.scrollHeight;
     }
 
+    function enableAdButton() {
+      if (adsWatched < requiredAds) {
+        document.getElementById("adBtn").disabled = false;
+      }
+    }
+
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -156,7 +162,7 @@
       })
       .then(r => r.json())
       .then(info => {
-        userEmail = info.email;
+        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
         document.getElementById("userEmailText").innerText = userEmail;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("appSection").style.display = "block";
@@ -190,10 +196,12 @@
     }
 
     function playAd() {
+      document.getElementById("adBtn").disabled = true;
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
         alert("मोबाइल ऐप ब्रिज कनेक्ट नहीं हुआ।");
+        document.getElementById("adBtn").disabled = false;
       }
     }
 
@@ -201,7 +209,7 @@
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("✅ ऐड सफलतापूर्वक पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -209,13 +217,31 @@
         syncBtn.disabled = false;
         syncBtn.classList.add("active");
         addLog("🎉 5 ऐड्स पूरे हो गए! अब 'स्टेप्स सिंक करें' बटन दबाएँ।");
+      } else {
+        document.getElementById("adBtn").disabled = false;
       }
     };
 
     async function ensureDataSource() {
+      try {
+        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
+          headers: { Authorization: "Bearer " + accessToken }
+        });
+        const listData = await listRes.json();
+        if (listData && listData.dataSource) {
+          for (let ds of listData.dataSource) {
+            if (ds.dataStreamName === "FitStepBoostSteps" || ds.dataType.name === "com.google.step_count.delta") {
+              return ds.dataStreamId;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("DataSource check error:", err);
+      }
+
       const payload = {
-        dataStreamName: "FitStepDelta",
-        type: "raw",
+        dataStreamName: "FitStepBoostSteps",
+        type: "derived",
         application: {
           name: "FitStep Boost",
           version: "1.0"
@@ -223,6 +249,13 @@
         dataType: {
           name: "com.google.step_count.delta",
           field: [{ name: "steps", format: "integer" }]
+        },
+        device: {
+          manufacturer: "FitStep",
+          model: "StepSensor",
+          type: "phone",
+          uid: "fitstep_sensor_v1",
+          version: "1.0"
         }
       };
 
@@ -241,7 +274,7 @@
           return data.dataStreamId;
         }
       } catch (e) {
-        console.error("DataSource check exception:", e);
+        console.error("DataSource create exception:", e);
       }
 
       return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
@@ -249,30 +282,58 @@
 
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("Google Fit डेटासोर्स तैयार किया जा रहा है...");
+      addLog("Google Fit डेटासोर्स जाँचा जा रहा है...");
 
       const activeStreamId = await ensureDataSource();
 
-      addLog("स्टेप्स की गणना की जा रही है...");
-      const totalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
+      addLog("डेटासोर्स कनेक्टेड: <b>" + activeStreamId.split(":")[0] + "...</b>");
+      addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
+      
+      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
       const now = Date.now();
-      const startTimeMillis = now - (6 * 60 * 60 * 1000);
-      const endTimeMillis = now - (15 * 60 * 1000);
+      
+      let points = [];
+      let stepsRemaining = targetTotalSteps;
+      let minuteOffset = 15 * 60 * 1000;
+      let currentTimeCursor = now - minuteOffset;
 
-      const startTimeNs = BigInt(startTimeMillis) * BigInt(1000000);
-      const endTimeNs = BigInt(endTimeMillis) * BigInt(1000000);
-      const datasetId = startTimeNs.toString() + "-" + endTimeNs.toString();
+      while (stepsRemaining > 0) {
+        let stepThisMinute = Math.floor(Math.random() * (100 - 60 + 1)) + 60;
+        if (stepsRemaining < stepThisMinute) {
+          stepThisMinute = stepsRemaining;
+        }
+        stepsRemaining -= stepThisMinute;
+
+        let segEnd = currentTimeCursor;
+        let segStart = currentTimeCursor - (60 * 1000);
+
+        let startNs = BigInt(segStart) * BigInt(1000000);
+        let endNs = BigInt(segEnd) * BigInt(1000000);
+
+        points.push({
+          startTimeNanos: startNs.toString(),
+          endTimeNanos: endNs.toString(),
+          dataTypeName: "com.google.step_count.delta",
+          value: [{ intVal: stepThisMinute }]
+        });
+
+        currentTimeCursor = segStart;
+      }
+
+      let overallStartTimeMillis = currentTimeCursor;
+      let overallEndTimeMillis = now - minuteOffset;
+
+      const overallStartNs = BigInt(overallStartTimeMillis) * BigInt(1000000);
+      const overallEndNs = BigInt(overallEndTimeMillis) * BigInt(1000000);
+      const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
+
+      points.reverse();
 
       const payload = {
         dataSourceId: activeStreamId,
-        minStartTimeNs: startTimeNs.toString(),
-        maxEndTimeNs: endTimeNs.toString(),
-        point: [{
-          startTimeNanos: startTimeNs.toString(),
-          endTimeNanos: endTimeNs.toString(),
-          dataTypeName: "com.google.step_count.delta",
-          value: [{ intVal: totalSteps }]
-        }]
+        minStartTimeNs: overallStartNs.toString(),
+        maxEndTimeNs: overallEndNs.toString(),
+        point: points
       };
 
       fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
@@ -285,8 +346,8 @@
       })
       .then(res => {
         if (res.ok) {
-          addLog("✅ " + totalSteps + " स्टेप्स सफलतापूर्वक सिंक हो गए!");
-          createSession(startTimeMillis, endTimeMillis, totalSteps);
+          addLog("✅ " + targetTotalSteps + " स्टेप्स प्रति-मिनट वॉक के साथ सिंक हो गए!");
+          createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
         } else {
           res.json().then(errData => {
             if (errData && errData.error && errData.error.message) {
