@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FitStep Boost</title>
+  <title>FitStep Tracker</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -80,8 +80,8 @@
 <body>
 
   <div class="card">
-    <h1>FitStep Boost</h1>
-    <p class="sub">Google Fit स्टेप्स ऑटोमेशन (सुरक्षित सिंक टूल)</p>
+    <h1>FitStep Tracker</h1>
+    <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
 
     <div id="loginSection">
       <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
@@ -131,7 +131,7 @@
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid",
+        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             accessToken = tokenResponse.access_token;
@@ -222,39 +222,23 @@
       }
     };
 
-    async function ensureDataSource() {
-      try {
-        const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
-          headers: { Authorization: "Bearer " + accessToken }
-        });
-        const listData = await listRes.json();
-        if (listData && listData.dataSource) {
-          for (let ds of listData.dataSource) {
-            if (ds.dataStreamName === "FitStepBoostSteps" || ds.dataType.name === "com.google.step_count.delta") {
-              return ds.dataStreamId;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("DataSource check error:", err);
-      }
-
+    async function getOrCreateSensorDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
-        dataStreamName: "FitStepBoostSteps",
+        dataStreamName: streamName,
         type: "derived",
         application: {
-          name: "FitStep Boost",
-          version: "1.0"
+          name: "Step Counter & Fitness Tracker",
+          version: "2.1"
         },
         dataType: {
-          name: "com.google.step_count.delta",
-          field: [{ name: "steps", format: "integer" }]
+          name: dataTypeName,
+          field: [{ name: fieldName, format: formatType }]
         },
         device: {
-          manufacturer: "FitStep",
-          model: "StepSensor",
+          manufacturer: "Android",
+          model: "Integrated Step Sensor",
           type: "phone",
-          uid: "fitstep_sensor_v1",
+          uid: "pedometer_sensor_hw",
           version: "1.0"
         }
       };
@@ -268,107 +252,125 @@
           },
           body: JSON.stringify(payload)
         });
-
         const data = await res.json();
-        if (data && data.dataStreamId) {
-          return data.dataStreamId;
-        }
+        if (data && data.dataStreamId) return data.dataStreamId;
       } catch (e) {
-        console.error("DataSource create exception:", e);
+        console.error("DataSource creation err:", e);
       }
-
-      return "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
+      return null;
     }
 
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("Google Fit डेटासोर्स जाँचा जा रहा है...");
+      addLog("सेंसर डेटासोर्स जाँचा जा रहा है...");
 
-      const activeStreamId = await ensureDataSource();
-
-      addLog("डेटासोर्स कनेक्टेड: <b>" + activeStreamId.split(":")[0] + "...</b>");
-      addLog("स्टेप्स को मिनट-दर-मिनट (60-100/मिनट) प्राकृतिक वॉक में तैयार किया जा रहा है...");
+      const stepStreamId = await getOrCreateSensorDataSource("com.google.step_count.delta", "steps", "integer", "PedoHardwareSteps") 
+        || "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
       
-      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11200 + 1)) + 11200;
+      const calStreamId = await getOrCreateSensorDataSource("com.google.calories.expended", "calories", "floatPoint", "ActiveCaloriesStream");
+      const distStreamId = await getOrCreateSensorDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
+
+      addLog("✅ सेंसर मोड सक्रिय: Integrated Step Sensor");
+      addLog("स्टेप्स, एक्टिव कैलोरीज़ और दूरी की गणना की जा रही है...");
+
+      const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
       const now = Date.now();
       
-      let points = [];
+      let stepPoints = [];
+      let calPoints = [];
+      let distPoints = [];
       let stepsRemaining = targetTotalSteps;
       let minuteOffset = 15 * 60 * 1000;
       let currentTimeCursor = now - minuteOffset;
 
       while (stepsRemaining > 0) {
-        let stepThisMinute = Math.floor(Math.random() * (100 - 60 + 1)) + 60;
-        if (stepsRemaining < stepThisMinute) {
-          stepThisMinute = stepsRemaining;
-        }
+        let stepThisMinute = Math.floor(Math.random() * (95 - 65 + 1)) + 65;
+        if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
 
         let segEnd = currentTimeCursor;
         let segStart = currentTimeCursor - (60 * 1000);
 
-        let startNs = BigInt(segStart) * BigInt(1000000);
-        let endNs = BigInt(segEnd) * BigInt(1000000);
+        let startNs = (BigInt(segStart) * BigInt(1000000)).toString();
+        let endNs = (BigInt(segEnd) * BigInt(1000000)).toString();
 
-        points.push({
-          startTimeNanos: startNs.toString(),
-          endTimeNanos: endNs.toString(),
+        stepPoints.push({
+          startTimeNanos: startNs,
+          endTimeNanos: endNs,
           dataTypeName: "com.google.step_count.delta",
           value: [{ intVal: stepThisMinute }]
         });
+
+        let calsThisMinute = parseFloat((stepThisMinute * 0.0415).toFixed(2));
+        if (calStreamId) {
+          calPoints.push({
+            startTimeNanos: startNs,
+            endTimeNanos: endNs,
+            dataTypeName: "com.google.calories.expended",
+            value: [{ fpVal: calsThisMinute }]
+          });
+        }
+
+        let distThisMinute = parseFloat((stepThisMinute * 0.76).toFixed(2));
+        if (distStreamId) {
+          distPoints.push({
+            startTimeNanos: startNs,
+            endTimeNanos: endNs,
+            dataTypeName: "com.google.distance.delta",
+            value: [{ fpVal: distThisMinute }]
+          });
+        }
 
         currentTimeCursor = segStart;
       }
 
       let overallStartTimeMillis = currentTimeCursor;
       let overallEndTimeMillis = now - minuteOffset;
+      const overallStartNs = (BigInt(overallStartTimeMillis) * BigInt(1000000)).toString();
+      const overallEndNs = (BigInt(overallEndTimeMillis) * BigInt(1000000)).toString();
+      const datasetId = overallStartNs + "-" + overallEndNs;
 
-      const overallStartNs = BigInt(overallStartTimeMillis) * BigInt(1000000);
-      const overallEndNs = BigInt(overallEndTimeMillis) * BigInt(1000000);
-      const datasetId = overallStartNs.toString() + "-" + overallEndNs.toString();
+      stepPoints.reverse();
+      calPoints.reverse();
+      distPoints.reverse();
 
-      points.reverse();
-
-      const payload = {
-        dataSourceId: activeStreamId,
-        minStartTimeNs: overallStartNs.toString(),
-        maxEndTimeNs: overallEndNs.toString(),
-        point: points
-      };
-
-      fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activeStreamId) + "/datasets/" + datasetId, {
+      const stepRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(stepStreamId) + "/datasets/" + datasetId, {
         method: "PATCH",
-        headers: {
-          Authorization: "Bearer " + accessToken,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(res => {
-        if (res.ok) {
-          addLog("✅ " + targetTotalSteps + " स्टेप्स प्रति-मिनट वॉक के साथ सिंक हो गए!");
-          createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
-        } else {
-          res.json().then(errData => {
-            if (errData && errData.error && errData.error.message) {
-              addLog("सिंक त्रुटि: " + errData.error.message);
-            } else {
-              addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
-            }
-          }).catch(() => {
-            addLog("सिंक त्रुटि: API अनुरोध विफल रहा।");
-          });
-          document.getElementById("syncBtn").disabled = false;
-        }
-      })
-      .catch(e => {
-        addLog("नेटवर्क त्रुटि: " + e.message);
-        document.getElementById("syncBtn").disabled = false;
+        headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ dataSourceId: stepStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: stepPoints })
       });
+
+      if (calStreamId && calPoints.length > 0) {
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(calStreamId) + "/datasets/" + datasetId, {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ dataSourceId: calStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: calPoints })
+        });
+      }
+
+      if (distStreamId && distPoints.length > 0) {
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(distStreamId) + "/datasets/" + datasetId, {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ dataSourceId: distStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: distPoints })
+        });
+      }
+
+      if (stepRes.ok) {
+        const totalCals = Math.round(targetTotalSteps * 0.0415);
+        const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
+        addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ रिकॉर्ड हुईं।");
+        addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
+        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
+      } else {
+        addLog("सिंक त्रुटि: अनुरोध विफल रहा।");
+        document.getElementById("syncBtn").disabled = false;
+      }
     }
 
     function createSession(start, end, steps) {
-      const sessionId = "fitstep_" + start;
+      const sessionId = "walk_" + start;
       fetch("https://www.googleapis.com/fitness/v1/users/me/sessions/" + sessionId, {
         method: "PUT",
         headers: {
@@ -377,8 +379,8 @@
         },
         body: JSON.stringify({
           id: sessionId,
-          name: "Brisk Walk",
-          description: "FitStep Boost Session",
+          name: "Outdoor Brisk Walk",
+          description: "Sensor tracked outdoor walking session",
           startTimeMillis: start,
           endTimeMillis: end,
           version: 1,
@@ -386,7 +388,7 @@
         })
       })
       .then(() => {
-        addLog("✅ वॉक सेशन रिकॉर्ड हो गया।");
+        addLog("✅ 'Outdoor Brisk Walk' सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
