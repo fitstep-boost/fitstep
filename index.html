@@ -262,18 +262,16 @@
 
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
-      addLog("सेंसर डेटासोर्स और एक्टिव टाइम तैयार किए जा रहे हैं...");
+      addLog("सेंसर डेटासोर्स जाँचा जा रहा है...");
 
       const stepStreamId = await getOrCreateSensorDataSource("com.google.step_count.delta", "steps", "integer", "PedoHardwareSteps") 
         || "raw:com.google.step_count.delta:com.google.android.gms:estimated_steps";
       
       const calStreamId = await getOrCreateSensorDataSource("com.google.calories.expended", "calories", "floatPoint", "ActiveCaloriesStream");
       const distStreamId = await getOrCreateSensorDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
-      const heartStreamId = await getOrCreateSensorDataSource("com.google.heart_minutes", "intensity", "floatPoint", "HeartPointsStream");
-      const activityStreamId = await getOrCreateSensorDataSource("com.google.activity.segment", "activity", "integer", "ActivitySegmentStream");
 
       addLog("✅ सेंसर मोड सक्रिय: Integrated Step Sensor");
-      addLog("कदम, एक्टिव टाइम, हार्ट पॉइंट्स और कैलोरीज़ की गणना जारी...");
+      addLog("कदम, एक्टिव कैलोरीज़ और दूरी की गणना की जा रही है...");
 
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
       const now = Date.now();
@@ -281,16 +279,13 @@
       let stepPoints = [];
       let calPoints = [];
       let distPoints = [];
-      let heartPoints = [];
-      let activityPoints = [];
       let stepsRemaining = targetTotalSteps;
-      let totalHeartPtsEarned = 0;
 
       let minuteOffset = 15 * 60 * 1000;
       let currentTimeCursor = now - minuteOffset;
 
       while (stepsRemaining > 0) {
-        let stepThisMinute = Math.floor(Math.random() * (110 - 85 + 1)) + 85;
+        let stepThisMinute = Math.floor(Math.random() * (95 - 65 + 1)) + 65;
         if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
 
@@ -307,7 +302,7 @@
           value: [{ intVal: stepThisMinute }]
         });
 
-        let calsThisMinute = parseFloat((stepThisMinute * 0.042).toFixed(2));
+        let calsThisMinute = parseFloat((stepThisMinute * 0.0415).toFixed(2));
         if (calStreamId) {
           calPoints.push({
             startTimeNanos: startNs,
@@ -327,25 +322,6 @@
           });
         }
 
-        if (heartStreamId) {
-          heartPoints.push({
-            startTimeNanos: startNs,
-            endTimeNanos: endNs,
-            dataTypeName: "com.google.heart_minutes",
-            value: [{ fpVal: 1.0 }]
-          });
-          totalHeartPtsEarned++;
-        }
-
-        if (activityStreamId) {
-          activityPoints.push({
-            startTimeNanos: startNs,
-            endTimeNanos: endNs,
-            dataTypeName: "com.google.activity.segment",
-            value: [{ intVal: 7 }] // 7 = Walking
-          });
-        }
-
         currentTimeCursor = segStart;
       }
 
@@ -358,17 +334,13 @@
       stepPoints.reverse();
       calPoints.reverse();
       distPoints.reverse();
-      heartPoints.reverse();
-      activityPoints.reverse();
 
-      // 1. स्टेप्स
       const stepRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(stepStreamId) + "/datasets/" + datasetId, {
         method: "PATCH",
         headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
         body: JSON.stringify({ dataSourceId: stepStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: stepPoints })
       });
 
-      // 2. कैलोरीज़
       if (calStreamId && calPoints.length > 0) {
         fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(calStreamId) + "/datasets/" + datasetId, {
           method: "PATCH",
@@ -377,7 +349,6 @@
         });
       }
 
-      // 3. दूरी
       if (distStreamId && distPoints.length > 0) {
         fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(distStreamId) + "/datasets/" + datasetId, {
           method: "PATCH",
@@ -386,42 +357,21 @@
         });
       }
 
-      // 4. हार्ट पॉइंट्स
-      if (heartStreamId && heartPoints.length > 0) {
-        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(heartStreamId) + "/datasets/" + datasetId, {
-          method: "PATCH",
-          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({ dataSourceId: heartStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: heartPoints })
-        });
-      }
-
-      // 5. एक्टिविटी सेगमेंट (Active Time 0s को ठीक करने के लिए)
-      if (activityStreamId && activityPoints.length > 0) {
-        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/" + encodeURIComponent(activityStreamId) + "/datasets/" + datasetId, {
-          method: "PATCH",
-          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({ dataSourceId: activityStreamId, minStartTimeNs: overallStartNs, maxEndTimeNs: overallEndNs, point: activityPoints })
-        });
-      }
-
       if (stepRes.ok) {
-        const totalCals = Math.round(targetTotalSteps * 0.042);
+        const totalCals = Math.round(targetTotalSteps * 0.0415);
         const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
-        const walkDurationMinutes = Math.round((overallEndTimeMillis - overallStartTimeMillis) / (60 * 1000));
-
         addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
-        addLog("❤️ <b>" + totalHeartPtsEarned + " हार्ट पॉइंट्स</b> क्रेडिट हुए!");
-        addLog("⏱️ एक्टिव समय: <b>" + walkDurationMinutes + " मिनट</b>");
-        addLog("🔥 <b>" + totalCals + " kcal</b> कैलोरीज़, 📍 <b>" + totalKm + " km</b> दूरी।");
-        
-        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkDurationMinutes);
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ रिकॉर्ड हुईं।");
+        addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
+        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
       } else {
-        addLog("सिंक त्रुटि: अनुरोध विफल रहा।");
+        const errJson = await stepRes.json().catch(() => ({}));
+        addLog("सिंक त्रुटि: " + (errJson.error?.message || "अनुरोध विफल रहा।"));
         document.getElementById("syncBtn").disabled = false;
       }
     }
 
-    function createSession(start, end, steps, durationMinutes) {
+    function createSession(start, end, steps) {
       const sessionId = "walk_" + start;
       fetch("https://www.googleapis.com/fitness/v1/users/me/sessions/" + sessionId, {
         method: "PUT",
@@ -435,13 +385,12 @@
           description: "Sensor tracked outdoor walking session",
           startTimeMillis: start,
           endTimeMillis: end,
-          activeTimeMillis: (end - start), // एक्टिव टाइम को सेशन से जोड़ना
           version: 1,
-          activityType: 7 // 7 = Walking
+          activityType: 7
         })
       })
       .then(() => {
-        addLog("✅ 'Outdoor Brisk Walk' सेशन लॉक हो गया।");
+        addLog("✅ 'Outdoor Brisk Walk' सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
