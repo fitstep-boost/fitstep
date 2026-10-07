@@ -62,16 +62,6 @@
     .btn-refresh { background: #0284c7; color: #fff; padding: 7px 14px; font-size: 12px; border-radius: 8px; width: auto; }
     .btn:disabled { background: #1e293b; border: 1px solid #334155; color: #475569; cursor: not-allowed; }
     .ad-counter-text { font-size: 13px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
-    .admin-badge {
-      background: #854d0e;
-      color: #fef08a;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 14px;
-      display: none;
-    }
     .status-text {
       background: #0f172a;
       border-radius: 12px;
@@ -107,8 +97,6 @@
         </div>
       </div>
 
-      <div id="adminBadge" class="admin-badge">🛠️ एडमिन टेस्ट मोड: ऐड्स बायपास सक्रिय</div>
-
       <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
       <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
       <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
@@ -121,11 +109,6 @@
     const APP_VERSION = "1.0";
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
-
-    // केवल मुख्य डेवलपर ईमेल
-    const ADMIN_EMAILS = [
-      "playwithmebysk@gmail.com"
-    ];
 
     let tokenClient;
     let accessToken = null;
@@ -163,7 +146,6 @@
       adsWatched = 0;
       document.getElementById("loginSection").style.display = "block";
       document.getElementById("appSection").style.display = "none";
-      document.getElementById("adminBadge").style.display = "none";
       document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
     }
 
@@ -193,22 +175,7 @@
 
         if (data.allowed) {
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          
-          const cleanEmail = email.toLowerCase().replace(/\s+/g, "").trim();
-          if (ADMIN_EMAILS.includes(cleanEmail)) {
-            document.getElementById("adminBadge").style.display = "block";
-            document.getElementById("adBtn").style.display = "none";
-            document.getElementById("adCounter").style.display = "none";
-            const syncBtn = document.getElementById("syncBtn");
-            syncBtn.disabled = false;
-            syncBtn.classList.add("active");
-            addLog("⚡ <b>एडमिन टेस्ट मोड सक्रिय:</b> बिना ऐड देखे सीधे 'स्टेप्स सिंक करें' दबाएँ।");
-          } else {
-            document.getElementById("adminBadge").style.display = "none";
-            document.getElementById("adBtn").style.display = "block";
-            document.getElementById("adCounter").style.display = "block";
-            document.getElementById("adBtn").disabled = false;
-          }
+          document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
           addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
           alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
@@ -223,6 +190,7 @@
     }
 
     function playAd() {
+      addLog("⏳ AdMob से ऐड लोड किया जा रहा है...");
       if (window.AndroidBridge && window.AndroidBridge.showRewardedAd) {
         window.AndroidBridge.showRewardedAd();
       } else {
@@ -234,7 +202,7 @@
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("✅ ऐड सफलतापूर्वक देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
