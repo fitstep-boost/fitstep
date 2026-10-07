@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
             FrameLayout.LayoutParams webViewParams = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
+            // Space at bottom for banner ad
             webViewParams.bottomMargin = (int) (50 * getResources().getDisplayMetrics().density);
             webView.setLayoutParams(webViewParams);
 
@@ -58,7 +59,8 @@ public class MainActivity extends AppCompatActivity {
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
-            webView.loadUrl("file:///android_asset/index.html");
+            // Load Live GitHub Pages URL (Remote & Set-and-Forget)
+            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
@@ -162,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
                         public void onUnityAdsShowStart(String placementId) {}
 
                         @Override
-                        public void onUnityAdsShowClick(String placementId) {}
+                        public void Action(String placementId) {}
 
                         @Override
                         public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) {}
