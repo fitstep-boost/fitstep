@@ -2,6 +2,7 @@ package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
+import android.os.Message;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -56,8 +57,10 @@ public class MainActivity extends AppCompatActivity {
             s.setDatabaseEnabled(true);
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
+            s.setJavaScriptCanOpenWindowsAutomatically(true);
+            s.setSupportMultipleWindows(true);
 
-            // OAuth के लिए Chrome User-Agent
+            // Google OAuth को सामान्य ब्राउज़र दिखाने के लिए
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -65,7 +68,6 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
-            // सीधा नेविगेशन—OAuth रीडायरेक्ट को कभी न रोकें
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String url) {
@@ -74,25 +76,61 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            webView.setWebChromeClient(new WebChromeClient());
-            webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+            // Google Identity Services पॉपअप डायलॉग हैंडलर
+            webView.setWebChromeClient(new WebChromeClient() {
+                @Override
+                public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                    WebView popupWebView = new WebView(MainActivity.this);
+                    WebSettings popupSettings = popupWebView.getSettings();
+                    popupSettings.setJavaScriptEnabled(true);
+                    popupSettings.setDomStorageEnabled(true);
+                    popupSettings.setUserAgentString(s.getUserAgentString());
 
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(popupWebView, true);
+
+                    popupWebView.setWebViewClient(new WebViewClient() {
+                        @Override
+                        public void onPageFinished(WebView v, String url) {
+                            super.onPageFinished(v, url);
+                            CookieManager.getInstance().flush();
+                        }
+                    });
+
+                    popupWebView.setWebChromeClient(new WebChromeClient() {
+                        @Override
+                        public void onCloseWindow(WebView window) {
+                            rootLayout.removeView(window);
+                        }
+                    });
+
+                    popupWebView.setLayoutParams(new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT));
+
+                    rootLayout.addView(popupWebView);
+
+                    WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                    transport.setWebView(popupWebView);
+                    resultMsg.sendToTarget();
+                    return true;
+                }
+            });
+
+            webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
             webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // बैनर लेआउट तुरंत सेट करें
-            setupBottomBanner();
+            // बैनर लेआउट लोड
+            loadBottomBanner();
 
-            // Unity SDK इनिशियलाइज़ेशन
+            // Unity Ads इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
                     runOnUiThread(() -> {
-                        if (bottomBanner != null) {
-                            bottomBanner.load();
-                        }
+                        if (bottomBanner != null) bottomBanner.load();
                     });
                 }
 
@@ -105,27 +143,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupBottomBanner() {
+    private void loadBottomBanner() {
         try {
             bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-            FrameLayout.LayoutParams bannerParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
-            bannerParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            rootLayout.addView(bottomBanner, bannerParams);
-
-            bottomBanner.setListener(new BannerView.IListener() {
-                @Override
-                public void onBannerLoaded(BannerView bannerAdView) {}
-                @Override
-                public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
-                @Override
-                public void onBannerClick(BannerView bannerAdView) {}
-                @Override
-                public void onBannerLeftApplication(BannerView bannerAdView) {}
-                @Override
-                public void onBannerShown(BannerView bannerAdView) {}
-            });
+            p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            rootLayout.addView(bottomBanner, p);
         } catch (Exception e) {
             e.printStackTrace();
         }
