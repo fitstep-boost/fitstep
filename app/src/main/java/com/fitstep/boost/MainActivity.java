@@ -2,8 +2,6 @@ package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.view.Gravity;
-import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -11,138 +9,155 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.LinearLayout;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.unity3d.ads.UnityAds;
-import com.unity3d.ads.IUnityAdsInitializationListener;
-import com.unity3d.ads.IUnityAdsShowListener;
-import com.unity3d.services.banners.BannerView;
-import com.unity3d.services.banners.UnityBannerSize;
-import com.unity3d.services.banners.BannerErrorInfo;
+import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.FullScreenContentCallback;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+import com.google.android.gms.ads.rewarded.RewardedAd;
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
-    private BannerView bottomBanner;
-    private LinearLayout rootLayout;
+    private AdView adView;
+    private RewardedAd rewardedAd;
+    private InterstitialAd interstitialAd;
 
-    private static final String UNITY_GAME_ID = "800391367";
-    private static final String PLACEMENT_REWARDED = "BP_Rewarded_Android";
-    private static final String PLACEMENT_INTERSTITIAL = "BP_Interstitial_Android";
-    private static final String PLACEMENT_BANNER = "BP_Banner_Android";
-    private static final boolean TEST_MODE = true;
+    // AdMob टेस्ट यूनिट आईडीज़
+    private static final String ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111";
+    private static final String ADMOB_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917";
+    private static final String ADMOB_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        try {
-            // वर्टिकल लेआउट: ऊपर वेबव्यू पूरा स्पेस लेगा, नीचे बैनर रहेगा
-            rootLayout = new LinearLayout(this);
-            rootLayout.setOrientation(LinearLayout.VERTICAL);
-            rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT));
+        // लीनियर लेआउट: ऊपर WebView और बिल्कुल नीचे AdMob बैनर (कोई ओवरलैप नहीं)
+        LinearLayout rootLayout = new LinearLayout(this);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
 
-            webView = new WebView(this);
-            LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    0, 1.0f);
-            webView.setLayoutParams(webParams);
+        webView = new WebView(this);
+        LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        webView.setLayoutParams(webParams);
 
-            WebSettings s = webView.getSettings();
-            s.setJavaScriptEnabled(true);
-            s.setDomStorageEnabled(true);
-            s.setDatabaseEnabled(true);
-            s.setAllowFileAccess(true);
-            s.setAllowContentAccess(true);
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setAllowFileAccess(true);
+        s.setAllowContentAccess(true);
 
-            // Google OAuth के लिए मानक Chrome एजेंट
-            String ua = s.getUserAgentString();
-            s.setUserAgentString(ua.replace("; wv", ""));
+        // Chrome User Agent ताकि Google लॉगिन कभी ब्लॉक न हो
+        String ua = s.getUserAgentString();
+        s.setUserAgentString(ua.replace("; wv", ""));
 
-            CookieManager cm = CookieManager.getInstance();
-            cm.setAcceptCookie(true);
-            cm.setAcceptThirdPartyCookies(webView, true);
+        CookieManager cm = CookieManager.getInstance();
+        cm.setAcceptCookie(true);
+        cm.setAcceptThirdPartyCookies(webView, true);
 
-            // पुरानी ऐप की तरह साधारण और साफ़ क्लाइंट
-            webView.setWebViewClient(new WebViewClient());
-            webView.setWebChromeClient(new WebChromeClient());
-            webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+        // ओरिजिनल क्लीन WebView क्लाइंट
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                CookieManager.getInstance().flush();
+            }
+        });
 
-            rootLayout.addView(webView);
-            setContentView(rootLayout);
+        webView.setWebChromeClient(new WebChromeClient());
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
-            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
+        rootLayout.addView(webView);
 
-            // Unity SDK इनिशियलाइज़ेशन
-            UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
-                @Override
-                public void onInitializationComplete() {
-                    runOnUiThread(() -> loadBanner());
-                }
+        // AdMob बॉटम बैनर जोड़ें
+        adView = new AdView(this);
+        adView.setAdUnitId(ADMOB_BANNER_ID);
+        adView.setAdSize(AdSize.BANNER);
+        rootLayout.addView(adView);
 
-                @Override
-                public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String msg) {}
-            });
+        setContentView(rootLayout);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // वेब ऐप लोड करें
+        webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
+
+        // AdMob इनिशियलाइज़ेशन
+        MobileAds.initialize(this, initializationStatus -> {
+            loadBannerAd();
+            loadRewardedAd();
+            loadInterstitialAd();
+        });
     }
 
-    private void loadBanner() {
-        try {
-            if (bottomBanner != null) return;
-            bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-            LinearLayout.LayoutParams bannerParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    (int) (50 * getResources().getDisplayMetrics().density));
-            bannerParams.gravity = Gravity.CENTER_HORIZONTAL;
-            bottomBanner.setLayoutParams(bannerParams);
+    private void loadBannerAd() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+        adView.loadAd(adRequest);
+    }
 
-            bottomBanner.setListener(new BannerView.IListener() {
-                @Override
-                public void onBannerLoaded(BannerView bannerAdView) {}
-                @Override
-                public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
-                @Override
-                public void onBannerClick(BannerView bannerAdView) {}
-                @Override
-                public void onBannerLeftApplication(BannerView bannerAdView) {}
-                @Override
-                public void onBannerShown(BannerView bannerAdView) {}
-            });
+    private void loadRewardedAd() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+        RewardedAd.load(this, ADMOB_REWARDED_ID, adRequest, new RewardedAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull RewardedAd ad) {
+                rewardedAd = ad;
+            }
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                rewardedAd = null;
+            }
+        });
+    }
 
-            rootLayout.addView(bottomBanner);
-            bottomBanner.load();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    private void loadInterstitialAd() {
+        AdRequest adRequest = new AdRequest.Builder().build();
+        InterstitialAd.load(this, ADMOB_INTERSTITIAL_ID, adRequest, new InterstitialAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull InterstitialAd ad) {
+                interstitialAd = ad;
+            }
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                interstitialAd = null;
+            }
+        });
     }
 
     public class WebAppInterface {
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
-                try {
-                    UnityAds.show(MainActivity.this, PLACEMENT_REWARDED, new IUnityAdsShowListener() {
+                if (rewardedAd != null) {
+                    rewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
                         @Override
-                        public void onUnityAdsShowFailure(String id, UnityAds.UnityAdsShowError err, String msg) {
+                        public void onAdDismissedFullScreenContent() {
+                            loadRewardedAd();
+                        }
+                        @Override
+                        public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
+                            loadRewardedAd();
                             if (webView != null) webView.evaluateJavascript("javascript:if(window.onAdFailed) window.onAdFailed();", null);
                         }
-                        @Override
-                        public void onUnityAdsShowStart(String id) {}
-                        @Override
-                        public void onUnityAdsShowClick(String id) {}
-                        @Override
-                        public void onUnityAdsShowComplete(String id, UnityAds.UnityAdsShowCompletionState state) {
-                            if (webView != null) webView.evaluateJavascript("javascript:if(window.onAdCompleted) window.onAdCompleted();", null);
+                    });
+                    rewardedAd.show(MainActivity.this, rewardItem -> {
+                        if (webView != null) {
+                            webView.evaluateJavascript("javascript:if(window.onAdCompleted) window.onAdCompleted();", null);
                         }
                     });
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } else {
+                    loadRewardedAd();
+                    if (webView != null) {
+                        webView.evaluateJavascript("javascript:alert('Ad लोड हो रहा है, कृपया 2 सेकंड बाद दबाएँ');", null);
+                        webView.evaluateJavascript("javascript:if(window.onAdFailed) window.onAdFailed();", null);
+                    }
                 }
             });
         }
@@ -150,19 +165,11 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void showInterstitialAd() {
             runOnUiThread(() -> {
-                try {
-                    UnityAds.show(MainActivity.this, PLACEMENT_INTERSTITIAL, new IUnityAdsShowListener() {
-                        @Override
-                        public void onUnityAdsShowFailure(String id, UnityAds.UnityAdsShowError err, String msg) {}
-                        @Override
-                        public void onUnityAdsShowStart(String id) {}
-                        @Override
-                        public void onUnityAdsShowClick(String id) {}
-                        @Override
-                        public void onUnityAdsShowComplete(String id, UnityAds.UnityAdsShowCompletionState state) {}
-                    });
-                } catch (Exception e) {
-                    e.printStackTrace();
+                if (interstitialAd != null) {
+                    interstitialAd.show(MainActivity.this);
+                    loadInterstitialAd();
+                } else {
+                    loadInterstitialAd();
                 }
             });
         }
@@ -178,8 +185,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onPause() {
+        if (adView != null) adView.pause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (adView != null) adView.resume();
+    }
+
+    @Override
     protected void onDestroy() {
-        if (bottomBanner != null) bottomBanner.destroy();
+        if (adView != null) adView.destroy();
         super.onDestroy();
     }
 }
