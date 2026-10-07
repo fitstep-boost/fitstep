@@ -1,7 +1,6 @@
 package com.fitstep.boost;
 
 import android.annotation.SuppressLint;
-import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -28,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private BannerView bottomBanner;
     private FrameLayout rootLayout;
 
+    // Unity Ads Configuration
     private static final String UNITY_GAME_ID = "800391367";
     private static final String PLACEMENT_REWARDED = "BP_Rewarded_Android";
     private static final String PLACEMENT_INTERSTITIAL = "BP_Interstitial_Android";
@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
             FrameLayout.LayoutParams webViewParams = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
+            // बैनर ऐड के लिए नीचे जगह
             webViewParams.bottomMargin = (int) (50 * getResources().getDisplayMetrics().density);
             webView.setLayoutParams(webViewParams);
 
@@ -61,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
             webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
             webSettings.setSupportMultipleWindows(false);
 
-            // Chrome User-Agent ताकि Google OAuth और रीडायरेक्ट बिना रुकावट पूरा हो सके
+            // User-Agent से '; wv' हटाया ताकि Google OAuth ब्लॉक न हो
             String defaultUserAgent = webSettings.getUserAgentString();
             webSettings.setUserAgentString(defaultUserAgent.replace("; wv", ""));
 
@@ -73,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                    // Google OAuth रीडायरेक्ट को स्वाभाविक रूप से उसी वेबव्यू में चलने दें
                     return false;
                 }
 
@@ -87,13 +87,13 @@ public class MainActivity extends AppCompatActivity {
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
-            // लाइव वेब ऐप लोड करें
+            // लाइव वेब ऐप यूआरएल
             webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // Unity Ads सेटअप
+            // Unity Ads इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
@@ -106,12 +106,4 @@ public class MainActivity extends AppCompatActivity {
             });
 
         } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void loadBottomBanner() {
-        runOnUiThread(() -> {
-            try {
-                if
-                    
+            
