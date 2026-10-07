@@ -44,9 +44,11 @@ public class MainActivity extends AppCompatActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT));
 
             webView = new WebView(this);
-            webView.setLayoutParams(new ViewGroup.LayoutParams(
+            FrameLayout.LayoutParams webViewParams = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT));
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+            webViewParams.bottomMargin = (int) (52 * getResources().getDisplayMetrics().density);
+            webView.setLayoutParams(webViewParams);
 
             WebSettings s = webView.getSettings();
             s.setJavaScriptEnabled(true);
@@ -55,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
 
-            // Google OAuth के लिए मानक क्रोम यूज़र-एजेंट
+            // OAuth के लिए Chrome User-Agent
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -63,22 +65,35 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
-            // पुराने वर्किंग कोड की तरह ही सामान्य वेबव्यू क्लाइंट
-            webView.setWebViewClient(new WebViewClient());
+            // सीधा नेविगेशन—OAuth रीडायरेक्ट को कभी न रोकें
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    CookieManager.getInstance().flush();
+                }
+            });
+
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+
+            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // लाइव वेब ऐप लोड करें
-            webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
+            // बैनर लेआउट तुरंत सेट करें
+            setupBottomBanner();
 
-            // Unity Ads शुरू करें
+            // Unity SDK इनिशियलाइज़ेशन
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
-                    loadBottomBanner();
+                    runOnUiThread(() -> {
+                        if (bottomBanner != null) {
+                            bottomBanner.load();
+                        }
+                    });
                 }
 
                 @Override
@@ -90,36 +105,30 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void loadBottomBanner() {
-        runOnUiThread(() -> {
-            try {
-                if (rootLayout == null || bottomBanner != null) return;
-                bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-                bottomBanner.setListener(new BannerView.IListener() {
-                    @Override
-                    public void onBannerLoaded(BannerView v) {
-                        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT);
-                        p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                        if (v.getParent() == null && rootLayout != null) {
-                            rootLayout.addView(v, p);
-                        }
-                    }
-                    @Override
-                    public void onBannerFailedToLoad(BannerView v, BannerErrorInfo err) {}
-                    @Override
-                    public void onBannerClick(BannerView v) {}
-                    @Override
-                    public void onBannerLeftApplication(BannerView v) {}
-                    @Override
-                    public void onBannerShown(BannerView v) {}
-                });
-                bottomBanner.load();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+    private void setupBottomBanner() {
+        try {
+            bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
+            FrameLayout.LayoutParams bannerParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            bannerParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            rootLayout.addView(bottomBanner, bannerParams);
+
+            bottomBanner.setListener(new BannerView.IListener() {
+                @Override
+                public void onBannerLoaded(BannerView bannerAdView) {}
+                @Override
+                public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
+                @Override
+                public void onBannerClick(BannerView bannerAdView) {}
+                @Override
+                public void onBannerLeftApplication(BannerView bannerAdView) {}
+                @Override
+                public void onBannerShown(BannerView bannerAdView) {}
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public class WebAppInterface {
