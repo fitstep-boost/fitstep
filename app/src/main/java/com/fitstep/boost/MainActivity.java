@@ -20,13 +20,15 @@ import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String LIVE_REWARDED_AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
+    // Google की 100% फिल रेट वाली आधिकारिक टेस्ट रिवॉर्डेड ऐड यूनिट आईडी
+    private static final String TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
     private FrameLayout rootContainer;
     private WebView mainWebView;
     private RewardedAd mRewardedAd;
     private boolean isAdLoading = false;
+    private boolean showAdWhenLoaded = false;
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
@@ -96,19 +98,52 @@ public class MainActivity extends AppCompatActivity {
         if (mRewardedAd != null || isAdLoading) return;
         isAdLoading = true;
         AdRequest adRequest = new AdRequest.Builder().build();
-        RewardedAd.load(this, LIVE_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
+        RewardedAd.load(this, TEST_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                 mRewardedAd = null;
                 isAdLoading = false;
+                if (showAdWhenLoaded) {
+                    showAdWhenLoaded = false;
+                    runOnUiThread(() -> {
+                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob एरर: " + loadAdError.getMessage() + " (Code: " + loadAdError.getCode() + ")');", null);
+                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                    });
+                }
             }
 
             @Override
             public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
                 mRewardedAd = rewardedAd;
                 isAdLoading = false;
+                if (showAdWhenLoaded) {
+                    showAdWhenLoaded = false;
+                    runOnUiThread(() -> showAdNow());
+                }
             }
         });
+    }
+
+    private void showAdNow() {
+        if (mRewardedAd != null) {
+            mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                @Override
+                public void onAdDismissedFullScreenContent() {
+                    mRewardedAd = null;
+                    loadRewardedAd(); // अगला ऐड तुरंत बैकग्राउंड में लोड करना शुरू करो
+                }
+
+                @Override
+                public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
+                    mRewardedAd = null;
+                    loadRewardedAd();
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                }
+            });
+            mRewardedAd.show(MainActivity.this, rewardItem -> {
+                mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
+            });
+        }
     }
 
     public class WebAppInterface {
@@ -116,24 +151,11 @@ public class MainActivity extends AppCompatActivity {
         public void showRewardedAd() {
             runOnUiThread(() -> {
                 if (mRewardedAd != null) {
-                    mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
-                        @Override
-                        public void onAdDismissedFullScreenContent() {
-                            mRewardedAd = null;
-                            loadRewardedAd();
-                        }
-
-                        @Override
-                        public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
-                            mRewardedAd = null;
-                            loadRewardedAd();
-                        }
-                    });
-                    mRewardedAd.show(MainActivity.this, rewardItem -> {
-                        mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
-                    });
+                    showAdNow();
                 } else {
+                    showAdWhenLoaded = true;
                     loadRewardedAd();
+                    mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड बैकग्राउंड से लाया जा रहा है, 2 सेकंड में खुलेगा...');", null);
                 }
             });
         }
