@@ -26,6 +26,7 @@ public class MainActivity extends AppCompatActivity {
     private BannerView bottomBanner;
     private FrameLayout rootLayout;
 
+    // Unity Ads Configuration
     private static final String UNITY_GAME_ID = "800391367";
     private static final String PLACEMENT_REWARDED = "BP_Rewarded_Android";
     private static final String PLACEMENT_INTERSTITIAL = "BP_Interstitial_Android";
@@ -57,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
             s.setAllowFileAccess(true);
             s.setAllowContentAccess(true);
 
-            // Google OAuth को अनुमति देने के लिए मानक User-Agent
+            // Google OAuth को प्राकृतिक रूप से चलने देने के लिए
             String ua = s.getUserAgentString();
             s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -65,34 +66,22 @@ public class MainActivity extends AppCompatActivity {
             cm.setAcceptCookie(true);
             cm.setAcceptThirdPartyCookies(webView, true);
 
-            webView.setWebViewClient(new WebViewClient() {
-                @Override
-                public void onPageFinished(WebView view, String url) {
-                    super.onPageFinished(view, url);
-                    CookieManager.getInstance().flush();
-                }
-            });
-
+            // पुरानी वर्किंग ऐप की तरह ही शुद्ध WebView क्लाइंट (बिना किसी बाधा के)
+            webView.setWebViewClient(new WebViewClient());
             webView.setWebChromeClient(new WebChromeClient());
             webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
 
+            // लाइव वेब ऐप लोड करें
             webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
             rootLayout.addView(webView);
             setContentView(rootLayout);
 
-            // बैनर व्यू सेटअप
-            setupBottomBanner();
-
-            // Unity Ads इनिशियलाइज़ेशन
+            // Unity Ads इनिशियलाइज़ेशन (बैकग्राउंड में)
             UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, TEST_MODE, new IUnityAdsInitializationListener() {
                 @Override
                 public void onInitializationComplete() {
-                    runOnUiThread(() -> {
-                        if (bottomBanner != null) {
-                            bottomBanner.load();
-                        }
-                    });
+                    loadBottomBanner();
                 }
 
                 @Override
@@ -104,30 +93,40 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupBottomBanner() {
-        try {
-            bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
-            FrameLayout.LayoutParams bannerParams = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            bannerParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            rootLayout.addView(bottomBanner, bannerParams);
+    private void loadBottomBanner() {
+        runOnUiThread(() -> {
+            try {
+                if (rootLayout == null || bottomBanner != null) return;
+                bottomBanner = new BannerView(MainActivity.this, PLACEMENT_BANNER, new UnityBannerSize(320, 50));
+                bottomBanner.setListener(new BannerView.IListener() {
+                    @Override
+                    public void onBannerLoaded(BannerView v) {
+                        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                        p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                        if (v.getParent() == null && rootLayout != null) {
+                            rootLayout.addView(v, p);
+                        }
+                    }
 
-            bottomBanner.setListener(new BannerView.IListener() {
-                @Override
-                public void onBannerLoaded(BannerView bannerAdView) {}
-                @Override
-                public void onBannerFailedToLoad(BannerView bannerAdView, BannerErrorInfo errorInfo) {}
-                @Override
-                public void onBannerClick(BannerView bannerAdView) {}
-                @Override
-                public void onBannerLeftApplication(BannerView bannerAdView) {}
-                @Override
-                public void onBannerShown(BannerView bannerAdView) {}
-            });
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+                    @Override
+                    public void onBannerFailedToLoad(BannerView v, BannerErrorInfo err) {}
+
+                    @Override
+                    public void onBannerClick(BannerView v) {}
+
+                    @Override
+                    public void onBannerLeftApplication(BannerView v) {}
+
+                    @Override
+                    public void onBannerShown(BannerView v) {}
+                });
+                bottomBanner.load();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     public class WebAppInterface {
