@@ -124,28 +124,19 @@
       }
     }
 
-    function initTokenClient() {
-      if (window.google && google.accounts && google.accounts.oauth2) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
-          callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              accessToken = tokenResponse.access_token;
-              localStorage.setItem("fitstep_token", accessToken);
-              fetchEmail();
-            } else {
-              addLog("लॉगिन रद्द किया गया।");
-            }
-          }
-        });
-      } else {
-        setTimeout(initTokenClient, 200);
-      }
-    }
-
     window.onload = function() {
-      initTokenClient();
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            accessToken = tokenResponse.access_token;
+            localStorage.setItem("fitstep_token", accessToken);
+            fetchEmail();
+          }
+        }
+      });
+
       if (accessToken) {
         fetchEmail();
       }
@@ -153,14 +144,7 @@
 
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
-      if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: "select_account" });
-      } else {
-        initTokenClient();
-        setTimeout(() => {
-          if (tokenClient) tokenClient.requestAccessToken({ prompt: "select_account" });
-        }, 400);
-      }
+      tokenClient.requestAccessToken({ prompt: "" });
     }
 
     function logout() {
@@ -179,10 +163,7 @@
       fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: "Bearer " + accessToken }
       })
-      .then(r => {
-        if (!r.ok) throw new Error("सत्र समाप्त");
-        return r.json();
-      })
+      .then(r => r.json())
       .then(info => {
         userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
         localStorage.setItem("fitstep_email", userEmail);
@@ -193,7 +174,7 @@
         verifyWhitelist(userEmail);
       })
       .catch(e => {
-        addLog("सत्र समाप्त। कृपया दोबारा लॉगिन करें।");
+        addLog("सत्र समाप्त। दोबारा लॉगिन करें।");
         logout();
       });
     }
@@ -209,8 +190,8 @@
           addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
           document.getElementById("adBtn").disabled = false;
         } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ ऐप वर्ज़न पुराना है।");
-          alert("ऐप वर्ज़न पुराना हो चुका है!");
+          addLog("❌ ऐप वर्ज़न पुराना है। नया वर्ज़न उपलब्ध है।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है!");
         } else {
           addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
         }
