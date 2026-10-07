@@ -105,6 +105,9 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onBannerLeftApplication(BannerView bannerAdView) {}
+
+                @Override
+                public void onBannerShown(BannerView bannerAdView) {}
             });
             bottomBanner.load();
         });
