@@ -143,7 +143,6 @@ public class MainActivity extends AppCompatActivity {
                 isAdLoading = false;
                 if (showAdWhenLoaded) {
                     showAdWhenLoaded = false;
-                    // AdMob fail -> Try Unity Fallback immediately
                     tryShowUnityOrNotify("AdMob उपलब्ध नहीं (Error: " + loadAdError.getCode() + ")");
                 }
             }
@@ -173,7 +172,6 @@ public class MainActivity extends AppCompatActivity {
                 public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
                     mRewardedAd = null;
                     loadAdMobRewarded();
-                    // AdMob display failed -> Fallback to Unity
                     tryShowUnityOrNotify("AdMob डिस्प्ले विफल");
                 }
             });
@@ -210,7 +208,6 @@ public class MainActivity extends AppCompatActivity {
                 mainWebView.evaluateJavascript("javascript:addLog('⚠️ " + previousError + " ➔ Unity ऐड्स शुरू हो रहा है...');", null);
                 showUnityAdNow();
             } else {
-                // If Unity is not pre-loaded, try to load again and alert
                 loadUnityRewarded();
                 mainWebView.evaluateJavascript("javascript:addLog('⚠️ दोनों नेटवर्क व्यस्त हैं। कृपया 3-4 सेकंड बाद प्रयास करें।');", null);
                 mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
@@ -255,26 +252,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // JS BRIDGE INTERFACE
+    // JS BRIDGE INTERFACE (FOR TESTING DIRECT UNITY ADS)
     // ==========================================
     public class WebAppInterface {
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
-                if (mRewardedAd != null) {
-                    showAdMobNow();
+                mainWebView.evaluateJavascript("javascript:addLog('🧪 टेस्टिंग: सीधे Unity Ads चलाया जा रहा है...');", null);
+                if (isUnityLoaded) {
+                    showUnityAdNow();
                 } else {
-                    // AdMob is not ready right now -> trigger AdMob load, but if Unity is ready, show Unity immediately
-                    if (isUnityLoaded) {
-                        mainWebView.evaluateJavascript("javascript:addLog('ℹ️ Unity Backup ऐड लोड हुआ...');", null);
-                        showUnityAdNow();
-                        loadAdMobRewarded(); // Preload AdMob for next time
-                    } else {
-                        showAdWhenLoaded = true;
-                        loadAdMobRewarded();
-                        loadUnityRewarded();
-                        mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड तैयार किया जा रहा है, कृपया 2-3 सेकंड रुकें...');", null);
-                    }
+                    loadUnityRewarded();
+                    mainWebView.evaluateJavascript("javascript:addLog('⏳ Unity Ads लोड हो रहा है, कृपया 2-3 सेकंड बाद फिर दबाएँ...');", null);
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
                 }
             });
         }
