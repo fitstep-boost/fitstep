@@ -10,16 +10,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-
-// AdMob Imports
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 // Unity Ads Imports
 import com.unity3d.ads.IUnityAdsInitializationListener;
@@ -29,25 +20,15 @@ import com.unity3d.ads.UnityAds;
 import com.unity3d.ads.UnityAdsShowOptions;
 
 public class MainActivity extends AppCompatActivity {
-    // AdMob IDs
-    private static final String LIVE_REWARDED_AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
-    // Unity Ads IDs
+    // Unity Ads Config
     private static final String UNITY_GAME_ID = "800391367";
     private static final String UNITY_PLACEMENT_ID = "BP_Rewarded_Android";
     private static final boolean UNITY_TEST_MODE = true;
 
     private FrameLayout rootContainer;
     private WebView mainWebView;
-
-    // AdMob State
-    private RewardedAd mRewardedAd;
-    private boolean isAdLoading = false;
-    private boolean showAdWhenLoaded = false;
-
-    // Unity Ads State
-    private boolean isUnityInitDone = false;
     private boolean isUnityLoaded = false;
     private boolean isUnityLoading = false;
 
@@ -68,35 +49,7 @@ public class MainActivity extends AppCompatActivity {
         rootContainer.addView(mainWebView);
         setContentView(rootContainer);
 
-        // 1. Initialize AdMob
-        MobileAds.initialize(this, initializationStatus -> {});
-        loadAdMobRewarded();
-
-        // 2. Initialize Unity Ads with strict feedback
-        UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, UNITY_TEST_MODE, new IUnityAdsInitializationListener() {
-            @Override
-            public void onInitializationComplete() {
-                isUnityInitDone = true;
-                runOnUiThread(() -> {
-                    if (mainWebView != null) {
-                        mainWebView.evaluateJavascript("javascript:addLog('✅ Unity Ads SDK सफलतापूर्वक शुरू (Init Done)');", null);
-                    }
-                });
-                loadUnityRewarded();
-            }
-
-            @Override
-            public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String message) {
-                isUnityInitDone = false;
-                runOnUiThread(() -> {
-                    if (mainWebView != null) {
-                        mainWebView.evaluateJavascript("javascript:addLog('❌ Unity Init फ़ेल: " + error.toString() + " - " + message + "');", null);
-                    }
-                });
-            }
-        });
-
-        // 3. WebView Settings
+        // WebView Settings
         WebSettings webSettings = mainWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
@@ -137,48 +90,49 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mainWebView.setWebViewClient(new WebViewClient());
+        mainWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                initUnityAds();
+            }
+        });
+
         mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
-    // ==========================================
-    // ADMOB LOGIC
-    // ==========================================
-    private void loadAdMobRewarded() {
-        if (mRewardedAd != null || isAdLoading) return;
-        isAdLoading = true;
-        AdRequest adRequest = new AdRequest.Builder().build();
-        RewardedAd.load(this, LIVE_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
+    private void initUnityAds() {
+        // Activity Context pass करना जरूरी है Unity Ads UI के लिए
+        UnityAds.initialize(MainActivity.this, UNITY_GAME_ID, UNITY_TEST_MODE, new IUnityAdsInitializationListener() {
             @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                mRewardedAd = null;
-                isAdLoading = false;
+            public void onInitializationComplete() {
+                runOnUiThread(() -> {
+                    mainWebView.evaluateJavascript("javascript:addLog('✅ Unity Ads SDK तैयार (Init OK)');", null);
+                });
+                loadUnityAd();
             }
 
             @Override
-            public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
-                mRewardedAd = rewardedAd;
-                isAdLoading = false;
+            public void onInitializationFailed(UnityAds.UnityAdsInitializationError error, String message) {
+                runOnUiThread(() -> {
+                    mainWebView.evaluateJavascript("javascript:addLog('❌ Unity Init फ़ेल: " + error.toString() + " - " + message + "');", null);
+                });
             }
         });
     }
 
-    // ==========================================
-    // UNITY ADS LOGIC
-    // ==========================================
-    private void loadUnityRewarded() {
+    private void loadUnityAd() {
         if (isUnityLoaded || isUnityLoading) return;
         isUnityLoading = true;
+        
         UnityAds.load(UNITY_PLACEMENT_ID, new IUnityAdsLoadListener() {
             @Override
             public void onUnityAdsAdLoaded(String placementId) {
                 isUnityLoaded = true;
                 isUnityLoading = false;
                 runOnUiThread(() -> {
-                    if (mainWebView != null) {
-                        mainWebView.evaluateJavascript("javascript:addLog('✅ Unity Ads रेडी हो गया! अब बटन दबाएँ।');", null);
-                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                    }
+                    mainWebView.evaluateJavascript("javascript:addLog('✅ Unity Ads लोड हो गया! अब बटन दबाएँ।');", null);
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
                 });
             }
 
@@ -187,23 +141,21 @@ public class MainActivity extends AppCompatActivity {
                 isUnityLoaded = false;
                 isUnityLoading = false;
                 runOnUiThread(() -> {
-                    if (mainWebView != null) {
-                        mainWebView.evaluateJavascript("javascript:addLog('❌ Unity लोड फ़ेल: " + error.toString() + " - " + message + "');", null);
-                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                    }
+                    mainWebView.evaluateJavascript("javascript:addLog('❌ Unity लोड फ़ेल: " + error.toString() + " | " + message + "');", null);
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
                 });
             }
         });
     }
 
-    private void showUnityAdNow() {
+    private void showUnityAd() {
         UnityAds.show(MainActivity.this, UNITY_PLACEMENT_ID, new UnityAdsShowOptions(), new IUnityAdsShowListener() {
             @Override
             public void onUnityAdsShowFailure(String placementId, UnityAds.UnityAdsShowError error, String message) {
                 isUnityLoaded = false;
-                loadUnityRewarded();
+                loadUnityAd();
                 runOnUiThread(() -> {
-                    mainWebView.evaluateJavascript("javascript:addLog('❌ Unity दिखाने में एरर: " + message + "');", null);
+                    mainWebView.evaluateJavascript("javascript:addLog('❌ Unity Show फ़ेल: " + message + "');", null);
                     mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
                 });
             }
@@ -217,14 +169,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onUnityAdsShowComplete(String placementId, UnityAds.UnityAdsShowCompletionState state) {
                 isUnityLoaded = false;
-                loadUnityRewarded();
+                loadUnityAd();
                 if (state == UnityAds.UnityAdsShowCompletionState.COMPLETED) {
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
                 } else {
                     runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ ऐड बीच में छोड़ दिया गया।');", null);
+                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ ऐड पूरा नहीं देखा गया।');", null);
                         mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
                     });
                 }
@@ -232,23 +184,16 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // ==========================================
-    // JS BRIDGE INTERFACE
-    // ==========================================
     public class WebAppInterface {
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
-                if (!isUnityInitDone) {
-                    mainWebView.evaluateJavascript("javascript:addLog('⚠️ Unity Init अभी पूरा नहीं हुआ है...');", null);
-                }
-                
                 if (isUnityLoaded) {
-                    mainWebView.evaluateJavascript("javascript:addLog('▶️ Unity Ads प्ले हो रहा है...');", null);
-                    showUnityAdNow();
+                    mainWebView.evaluateJavascript("javascript:addLog('▶️ Unity Ads शुरू हो रहा है...');", null);
+                    showUnityAd();
                 } else {
-                    loadUnityRewarded();
-                    mainWebView.evaluateJavascript("javascript:addLog('⏳ Unity Ads लोड किया जा रहा है... (अगर एरर होगा तो नीचे दिखेगा)');", null);
+                    mainWebView.evaluateJavascript("javascript:addLog('⏳ Unity Ads अभी तैयार नहीं है, दोबारा लोड किया जा रहा है...');", null);
+                    loadUnityAd();
                 }
             });
         }
