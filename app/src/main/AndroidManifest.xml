@@ -8,6 +8,7 @@
         android:allowBackup="true"
         android:label="FitStep Boost"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
         <meta-data
