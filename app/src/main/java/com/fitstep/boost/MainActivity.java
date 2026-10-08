@@ -31,7 +31,6 @@ public class MainActivity extends AppCompatActivity {
     private RewardedAd rewardedAd;
     private InterstitialAd interstitialAd;
 
-    // AdMob टेस्ट यूनिट आईडीज़
     private static final String ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111";
     private static final String ADMOB_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String ADMOB_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712";
@@ -41,7 +40,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // लीनियर लेआउट: ऊपर WebView और बिल्कुल नीचे AdMob बैनर (कोई ओवरलैप नहीं)
         LinearLayout rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
 
@@ -57,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
 
-        // Chrome User Agent ताकि Google लॉगिन कभी ब्लॉक न हो
         String ua = s.getUserAgentString();
         s.setUserAgentString(ua.replace("; wv", ""));
 
@@ -65,7 +62,6 @@ public class MainActivity extends AppCompatActivity {
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
 
-        // ओरिजिनल क्लीन WebView क्लाइंट
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -79,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
 
         rootLayout.addView(webView);
 
-        // AdMob बॉटम बैनर जोड़ें
         adView = new AdView(this);
         adView.setAdUnitId(ADMOB_BANNER_ID);
         adView.setAdSize(AdSize.BANNER);
@@ -87,10 +82,8 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(rootLayout);
 
-        // वेब ऐप लोड करें
         webView.loadUrl("https://fitstep-boost.github.io/fitstep/");
 
-        // AdMob इनिशियलाइज़ेशन
         MobileAds.initialize(this, initializationStatus -> {
             loadBannerAd();
             loadRewardedAd();
@@ -191,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onResume() {
+    protected void恢复() {
         super.onResume();
         if (adView != null) adView.resume();
     }
