@@ -118,43 +118,32 @@
 
     function addLog(msg) {
       const box = document.getElementById("statusBox");
-      if (box) {
-        box.innerHTML += "<br>" + msg;
-        box.scrollTop = box.scrollHeight;
-      }
+      box.innerHTML += "<br>" + msg;
+      box.scrollTop = box.scrollHeight;
     }
 
-    function initGsi() {
-      if (window.google && google.accounts && google.accounts.oauth2) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
-          callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              accessToken = tokenResponse.access_token;
-              fetchEmail();
-            }
-          }
-        });
-      } else {
-        setTimeout(initGsi, 250);
+    function enableAdButton() {
+      if (adsWatched < requiredAds) {
+        document.getElementById("adBtn").disabled = false;
       }
     }
 
     window.onload = function() {
-      initGsi();
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            accessToken = tokenResponse.access_token;
+            fetchEmail();
+          }
+        }
+      });
     };
 
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
-      if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: "select_account" });
-      } else {
-        initGsi();
-        setTimeout(() => {
-          if (tokenClient) tokenClient.requestAccessToken({ prompt: "select_account" });
-        }, 500);
-      }
+      tokenClient.requestAccessToken({ prompt: "select_account" });
     }
 
     function logout() {
@@ -216,12 +205,11 @@
       }
     }
 
-    // Android ब्रिज कॉलबैक (AdMob के लिए)
-    window.onAdCompleted = function() {
+    window.adRewardCompleted = function() {
       adsWatched++;
       document.getElementById("adBtn").innerText = "ऐड्स देखें और सिंक शुरू करें (" + adsWatched + "/5)";
       document.getElementById("adCounter").innerText = "देखे गए ऐड्स: " + adsWatched + " / " + requiredAds;
-      addLog("✅ ऐड पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
+      addLog("✅ ऐड सफलतापूर्वक पूरा देखा गया (" + adsWatched + "/" + requiredAds + ")");
 
       if (adsWatched >= requiredAds) {
         document.getElementById("adBtn").disabled = true;
@@ -234,13 +222,7 @@
       }
     };
 
-    window.onAdFailed = function() {
-      addLog("⚠️ ऐड लोड नहीं हुआ या रद्द हुआ।");
-      document.getElementById("adBtn").disabled = false;
-    };
-
-    window.adRewardCompleted = window.onAdCompleted;
-
+    // Google Fit 100% गारंटेड डेटासोर्स क्रिएटर
     async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
         dataStreamName: streamName,
@@ -273,8 +255,11 @@
         });
         const data = await res.json();
         if (data && data.dataStreamId) return data.dataStreamId;
-      } catch (e) {}
+      } catch (e) {
+        console.error("Error creating datasource:", e);
+      }
 
+      // अगर डेटासोर्स पहले से मौजूद है तो लिस्ट से निकालें
       try {
         const listRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources", {
           headers: { Authorization: "Bearer " + accessToken }
@@ -301,7 +286,7 @@
       const distStreamId = await getOrCreateDataSource("com.google.distance.delta", "distance", "floatPoint", "WalkingDistanceStream");
 
       if (!stepStreamId) {
-        addLog("❌ डेटासोर्स कनेक्शन त्रुटि, दोबारा प्रयास करें।");
+        addLog("❌ डेटासोर्स कनेक्शन त्रुटि, कृपया दोबारा प्रयास करें।");
         document.getElementById("syncBtn").disabled = false;
         return;
       }
@@ -396,14 +381,10 @@
       if (stepRes.ok) {
         const totalCals = Math.round(targetTotalSteps * 0.0415);
         const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
-        addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> दर्ज!");
-        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज!");
-        addLog("📍 <b>" + totalKm + " km</b> दूरी दर्ज!");
+        addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
+        addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ रिकॉर्ड हुईं।");
+        addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
-
-        if (window.AndroidBridge && window.AndroidBridge.showInterstitialAd) {
-          window.AndroidBridge.showInterstitialAd();
-        }
       } else {
         const errJson = await stepRes.json().catch(() => ({}));
         addLog("सिंक त्रुटि: " + (errJson.error?.message || "अनुरोध विफल रहा।"));
@@ -430,7 +411,7 @@
         })
       })
       .then(() => {
-        addLog("✅ सेशन रिकॉर्ड हो गया।");
+        addLog("✅ 'Outdoor Brisk Walk' सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
