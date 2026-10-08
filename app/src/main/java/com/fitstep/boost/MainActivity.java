@@ -184,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void恢复() {
+    protected void onResume() {
         super.onResume();
         if (adView != null) adView.resume();
     }
