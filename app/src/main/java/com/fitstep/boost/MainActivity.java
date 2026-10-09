@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity {
     
     // Start.io App ID & Config
     private static final String STARTIO_APP_ID = "209703459";
-    private static final boolean STARTIO_TEST_MODE = true; // Kept in test mode as requested
+    private static final boolean STARTIO_TEST_MODE = true; // Still in test mode as requested
 
     private FrameLayout rootContainer;
     private FrameLayout bannerContainer;
@@ -98,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
         mStartAppInterstitialAd = new StartAppAd(this);
         loadStartIoRewardedAd();
 
-        // 3. Setup Single Slot Sticky Banner (Fallback logic)
+        // 3. Setup Sticky Banner Slot with Fallback
         setupStickyBannerSlot();
 
         // WebView Settings
@@ -146,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
-    // --- Banner Slot with Fallback ---
+    // --- Banner Slot Fallback Logic ---
     private void setupStickyBannerSlot() {
         bannerContainer = new FrameLayout(this);
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -173,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
         adMobBannerView.setAdListener(new AdListener() {
             @Override
             public void onAdLoaded() {
-                // AdMob loaded successfully, keep it visible
+                // AdMob Banner loaded -> show it
                 bannerContainer.removeAllViews();
                 bannerContainer.addView(adMobBannerView);
             }
@@ -326,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- Interstitial Ad Methods (On Step Sync) ---
+    // --- Interstitial Ad Methods ---
     private void loadInterstitialAd() {
         if (isInterstitialLoading || mAdMobInterstitialAd != null) return;
         isInterstitialLoading = true;
