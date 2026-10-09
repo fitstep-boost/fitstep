@@ -22,7 +22,7 @@ import com.unity3d.ads.UnityAdsShowOptions;
 public class MainActivity extends AppCompatActivity {
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
-    // Unity Official Global Test IDs for Verification
+    // Unity Official Global Test IDs
     private static final String UNITY_GAME_ID = "1486550";
     private static final String UNITY_PLACEMENT_ID = "Rewarded_Android";
     private static final boolean UNITY_TEST_MODE = true;
