@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity {
     
     // Start.io App ID & Config
     private static final String STARTIO_APP_ID = "209703459";
-    private static final boolean STARTIO_TEST_MODE = true; // Still in test mode as requested
+    private static final boolean STARTIO_TEST_MODE = true; // Testing mode ON
 
     private FrameLayout rootContainer;
     private FrameLayout bannerContainer;
@@ -98,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
         mStartAppInterstitialAd = new StartAppAd(this);
         loadStartIoRewardedAd();
 
-        // 3. Setup Sticky Banner Slot with Fallback
+        // 3. Setup Single Slot Sticky Banner (Fallback logic)
         setupStickyBannerSlot();
 
         // WebView Settings
@@ -146,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
-    // --- Banner Slot Fallback Logic ---
+    // --- Banner Slot with Fallback ---
     private void setupStickyBannerSlot() {
         bannerContainer = new FrameLayout(this);
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -173,14 +173,12 @@ public class MainActivity extends AppCompatActivity {
         adMobBannerView.setAdListener(new AdListener() {
             @Override
             public void onAdLoaded() {
-                // AdMob Banner loaded -> show it
                 bannerContainer.removeAllViews();
                 bannerContainer.addView(adMobBannerView);
             }
 
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                // AdMob Banner failed -> fallback to Start.io Banner
                 showStartIoBannerFallback();
             }
         });
@@ -326,7 +324,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- Interstitial Ad Methods ---
+    // --- Interstitial Ad Methods (On Step Sync) ---
     private void loadInterstitialAd() {
         if (isInterstitialLoading || mAdMobInterstitialAd != null) return;
         isInterstitialLoading = true;
