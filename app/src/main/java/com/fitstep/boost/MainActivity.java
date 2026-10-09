@@ -3,6 +3,7 @@ package com.fitstep.boost;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Message;
+import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -14,14 +15,20 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 // AdMob Imports
+import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 // Start.io Imports
+import com.startapp.sdk.ads.banner.Banner;
 import com.startapp.sdk.adsbase.StartAppAd;
 import com.startapp.sdk.adsbase.StartAppSDK;
 import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener;
@@ -32,25 +39,34 @@ import com.startapp.sdk.adsbase.Ad;
 public class MainActivity extends AppCompatActivity {
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
     
-    // AdMob Live ID
-    private static final String ADMOB_LIVE_REWARDED_ID = "ca-app-pub-4526276681965606/8548376683";
+    // Live AdMob IDs
+    private static final String ADMOB_REWARDED_ID = "ca-app-pub-4526276681965606/8548376683";
+    private static final String ADMOB_BANNER_ID = "ca-app-pub-4526276681965606/7711212827";
+    private static final String ADMOB_INTERSTITIAL_ID = "ca-app-pub-4526276681965606/5621155978";
     
     // Start.io App ID & Config
     private static final String STARTIO_APP_ID = "209703459";
-    private static final boolean STARTIO_TEST_MODE = true; // Testing mode ON for clear distinction
+    private static final boolean STARTIO_TEST_MODE = true; // Kept in test mode as requested
 
     private FrameLayout rootContainer;
+    private FrameLayout bannerContainer;
     private WebView mainWebView;
 
-    // AdMob Variables
+    // Banner Views
+    private AdView adMobBannerView;
+    private Banner startIoBannerView;
+
+    // Rewarded Ads
     private RewardedAd mAdMobRewardedAd;
     private boolean isAdMobLoading = false;
-
-    // Start.io Variables
     private StartAppAd mStartAppRewardedAd;
     private boolean isStartIoLoading = false;
-
     private boolean showAdWhenReady = false;
+
+    // Interstitial Ads
+    private InterstitialAd mAdMobInterstitialAd;
+    private StartAppAd mStartAppInterstitialAd;
+    private boolean isInterstitialLoading = false;
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
@@ -63,21 +79,27 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
         mainWebView = new WebView(this);
-        mainWebView.setLayoutParams(new ViewGroup.LayoutParams(
+        FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        mainWebView.setLayoutParams(webParams);
         rootContainer.addView(mainWebView);
         setContentView(rootContainer);
 
         // 1. Initialize AdMob
         MobileAds.initialize(this, initializationStatus -> {});
-        loadAdMobAd();
+        loadAdMobRewardedAd();
+        loadInterstitialAd();
 
-        // 2. Initialize Start.io (Test Mode)
+        // 2. Initialize Start.io
         StartAppSDK.init(this, STARTIO_APP_ID, false);
         StartAppSDK.setTestAdsEnabled(STARTIO_TEST_MODE);
         mStartAppRewardedAd = new StartAppAd(this);
-        loadStartIoAd();
+        mStartAppInterstitialAd = new StartAppAd(this);
+        loadStartIoRewardedAd();
+
+        // 3. Setup Single Slot Sticky Banner (Fallback logic)
+        setupStickyBannerSlot();
 
         // WebView Settings
         WebSettings webSettings = mainWebView.getSettings();
@@ -124,20 +146,74 @@ public class MainActivity extends AppCompatActivity {
         mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
-    // --- AdMob Methods ---
-    private void loadAdMobAd() {
+    // --- Banner Slot with Fallback ---
+    private void setupStickyBannerSlot() {
+        bannerContainer = new FrameLayout(this);
+        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        containerParams.gravity = Gravity.BOTTOM;
+        bannerContainer.setLayoutParams(containerParams);
+        rootContainer.addView(bannerContainer);
+
+        loadAdMobBannerWithFallback();
+    }
+
+    private void loadAdMobBannerWithFallback() {
+        adMobBannerView = new AdView(this);
+        adMobBannerView.setAdUnitId(ADMOB_BANNER_ID);
+        adMobBannerView.setAdSize(AdSize.BANNER);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.gravity = Gravity.CENTER_HORIZONTAL;
+        adMobBannerView.setLayoutParams(params);
+
+        adMobBannerView.setAdListener(new AdListener() {
+            @Override
+            public void onAdLoaded() {
+                // AdMob loaded successfully, keep it visible
+                bannerContainer.removeAllViews();
+                bannerContainer.addView(adMobBannerView);
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                // AdMob Banner failed -> fallback to Start.io Banner
+                showStartIoBannerFallback();
+            }
+        });
+
+        AdRequest adRequest = new AdRequest.Builder().build();
+        adMobBannerView.loadAd(adRequest);
+    }
+
+    private void showStartIoBannerFallback() {
+        bannerContainer.removeAllViews();
+        startIoBannerView = new Banner(this);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.gravity = Gravity.CENTER_HORIZONTAL;
+        startIoBannerView.setLayoutParams(params);
+        bannerContainer.addView(startIoBannerView);
+    }
+
+    // --- Rewarded Ad Methods ---
+    private void loadAdMobRewardedAd() {
         if (mAdMobRewardedAd != null || isAdMobLoading) return;
         isAdMobLoading = true;
 
         AdRequest adRequest = new AdRequest.Builder().build();
-        RewardedAd.load(this, ADMOB_LIVE_REWARDED_ID, adRequest, new RewardedAdLoadCallback() {
+        RewardedAd.load(this, ADMOB_REWARDED_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
                 mAdMobRewardedAd = rewardedAd;
                 isAdMobLoading = false;
                 if (showAdWhenReady) {
                     showAdWhenReady = false;
-                    runOnUiThread(() -> showAdMobNow());
+                    runOnUiThread(() -> showAdMobRewardedNow());
                 }
             }
 
@@ -145,37 +221,35 @@ public class MainActivity extends AppCompatActivity {
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                 mAdMobRewardedAd = null;
                 isAdMobLoading = false;
-                // If user was waiting for an ad, trigger Start.io fallback immediately
                 if (showAdWhenReady) {
                     showAdWhenReady = false;
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob लोड नहीं हुआ (Code: " + loadAdError.getCode() + ") -> Start.io बैकअप चालू...');", null);
-                        triggerStartIoFallback();
+                        triggerStartIoRewardedFallback();
                     });
                 }
             }
         });
     }
 
-    private void showAdMobNow() {
+    private void showAdMobRewardedNow() {
         if (mAdMobRewardedAd != null) {
             runOnUiThread(() -> {
-                mainWebView.evaluateJavascript("javascript:addLog('🟢 AdMob लाइव ऐड शुरू हो रहा है...');", null);
+                mainWebView.evaluateJavascript("javascript:addLog('🟢 AdMob ऐड शुरू हो रहा है...');", null);
             });
 
             mAdMobRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
                 @Override
                 public void onAdDismissedFullScreenContent() {
                     mAdMobRewardedAd = null;
-                    loadAdMobAd();
+                    loadAdMobRewardedAd();
                 }
 
                 @Override
                 public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
                     mAdMobRewardedAd = null;
-                    loadAdMobAd();
-                    // AdMob display failed -> fallback to Start.io
-                    runOnUiThread(() -> triggerStartIoFallback());
+                    loadAdMobRewardedAd();
+                    runOnUiThread(() -> triggerStartIoRewardedFallback());
                 }
             });
 
@@ -185,12 +259,11 @@ public class MainActivity extends AppCompatActivity {
                 });
             });
         } else {
-            triggerStartIoFallback();
+            triggerStartIoRewardedFallback();
         }
     }
 
-    // --- Start.io Methods (Fallback) ---
-    private void loadStartIoAd() {
+    private void loadStartIoRewardedAd() {
         if (isStartIoLoading) return;
         isStartIoLoading = true;
 
@@ -207,7 +280,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void triggerStartIoFallback() {
+    private void triggerStartIoRewardedFallback() {
         if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
             runOnUiThread(() -> {
                 mainWebView.evaluateJavascript("javascript:addLog('🔄 Start.io बैकअप ऐड दिखाया जा रहा है...');", null);
@@ -225,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
             mStartAppRewardedAd.showAd(new AdDisplayListener() {
                 @Override
                 public void adHidden(Ad ad) {
-                    loadStartIoAd();
+                    loadStartIoRewardedAd();
                 }
 
                 @Override
@@ -236,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void adNotDisplayed(Ad ad) {
-                    loadStartIoAd();
+                    loadStartIoRewardedAd();
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:addLog('❌ दोनों नेटवर्क्स के ऐड उपलब्ध नहीं हैं।');", null);
                         mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
@@ -244,42 +317,87 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         } else {
-            // Both not ready yet
-            loadStartIoAd();
-            loadAdMobAd();
+            loadStartIoRewardedAd();
+            loadAdMobRewardedAd();
             runOnUiThread(() -> {
-                mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड लोड हो रहा है, कृपया 2 सेकंड बाद दोबारा दबाएँ...');", null);
+                mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड लोड हो रहा है, कृपया पुनः प्रयास करें...');", null);
                 mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
             });
         }
     }
 
-    // --- JavaScript Interface ---
+    // --- Interstitial Ad Methods (On Step Sync) ---
+    private void loadInterstitialAd() {
+        if (isInterstitialLoading || mAdMobInterstitialAd != null) return;
+        isInterstitialLoading = true;
+
+        AdRequest adRequest = new AdRequest.Builder().build();
+        InterstitialAd.load(this, ADMOB_INTERSTITIAL_ID, adRequest, new InterstitialAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                mAdMobInterstitialAd = interstitialAd;
+                isInterstitialLoading = false;
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                mAdMobInterstitialAd = null;
+                isInterstitialLoading = false;
+                mStartAppInterstitialAd.loadAd(StartAppAd.AdMode.AUTOMATIC);
+            }
+        });
+    }
+
+    private void showInterstitialNow() {
+        if (mAdMobInterstitialAd != null) {
+            mAdMobInterstitialAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                @Override
+                public void onAdDismissedFullScreenContent() {
+                    mAdMobInterstitialAd = null;
+                    loadInterstitialAd();
+                }
+
+                @Override
+                public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
+                    mAdMobInterstitialAd = null;
+                    loadInterstitialAd();
+                    if (mStartAppInterstitialAd.isReady()) {
+                        mStartAppInterstitialAd.showAd();
+                    }
+                }
+            });
+            mAdMobInterstitialAd.show(this);
+        } else if (mStartAppInterstitialAd != null && mStartAppInterstitialAd.isReady()) {
+            mStartAppInterstitialAd.showAd();
+        } else {
+            loadInterstitialAd();
+        }
+    }
+
+    // --- JavaScript Interface Bridge ---
     public class WebAppInterface {
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
-                // 1. First priority: Check if AdMob is ready
                 if (mAdMobRewardedAd != null) {
-                    showAdMobNow();
-                } 
-                // 2. Second priority: If AdMob is loading, give it a shot, otherwise check Start.io
-                else if (isAdMobLoading) {
+                    showAdMobRewardedNow();
+                } else if (isAdMobLoading) {
                     showAdWhenReady = true;
                     mainWebView.evaluateJavascript("javascript:addLog('⏳ AdMob कनेक्ट किया जा रहा है...');", null);
-                } 
-                // 3. Fallback immediately to Start.io
-                else if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
-                    triggerStartIoFallback();
-                } 
-                // 4. If neither is preloaded, start loading both
-                else {
+                } else if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
+                    triggerStartIoRewardedFallback();
+                } else {
                     showAdWhenReady = true;
-                    loadAdMobAd();
-                    loadStartIoAd();
+                    loadAdMobRewardedAd();
+                    loadStartIoRewardedAd();
                     mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड लोड हो रहा है, कृपया प्रतीक्षा करें...');", null);
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void showInterstitialAd() {
+            runOnUiThread(() -> showInterstitialNow());
         }
     }
 }
