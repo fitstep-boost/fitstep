@@ -11,7 +11,7 @@
             color: #f8fafc;
             margin: 0;
             padding: 16px;
-            padding-bottom: 75px; /* Sticky banner space */
+            padding-bottom: 75px; /* Sticky Banner space */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -92,18 +92,20 @@
 
     <div class="card" id="account-card">
         <div class="label">लॉगिन अकाउंट</div>
-        <div class="val" id="user-email">जाँच जारी है...</div>
+        <div class="val" id="user-email">लॉगिन नहीं है</div>
+        <button class="btn-primary" id="btn-login" onclick="loginGoogleFit()">Google Fit से लॉगिन करें</button>
         <div class="btn-group" id="auth-buttons" style="display: none;">
             <button class="btn-secondary" onclick="checkAuthStatus()">स्थिति रिफ्रेश करें 🔄</button>
             <button class="btn-danger" onclick="signOutUser()">साइन आउट</button>
         </div>
-        <button class="btn-primary" id="btn-login" style="display: none;" onclick="loginGoogleFit()">Google Fit से लॉगिन करें</button>
     </div>
 
-    <button id="btn-ad" class="btn-primary" onclick="watchAdClick()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
-    <div class="counter-badge" id="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
-
-    <button id="btn-sync" class="btn-primary" disabled onclick="startSyncProcess()">स्टेप्स सिंक करें</button>
+    <!-- केवल Whitelist अप्रूव होने के बाद ही दिखेगा -->
+    <div id="flow-area" style="display: none;">
+        <button id="btn-ad" class="btn-primary" onclick="watchAdClick()">ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+        <div class="counter-badge" id="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
+        <button id="btn-sync" class="btn-primary" disabled onclick="startSyncProcess()">स्टेप्स सिंक करें</button>
+    </div>
 
     <div style="margin-top: 16px;">
         <div class="log-box" id="log-box"></div>
@@ -111,8 +113,16 @@
 </div>
 
 <script>
-    let adsWatched = 0;
+    const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
+    const REDIRECT_URI = "https://fitstep-boost.github.io/fitstep/";
     const TOTAL_ADS_REQUIRED = 5;
+
+    // स्वीकृत ईमेल लिस्ट (Whitelist)
+    const WHITELISTED_EMAILS = [
+        "playwithmebysk@gmail.com"
+    ];
+
+    let adsWatched = 0;
     let userEmail = null;
     let accessToken = null;
     let isCoolingDown = false;
@@ -164,7 +174,7 @@
         updateAdStatusUI();
     }
 
-    // Called by Android Native Code when Rewarded Ad Finishes
+    // Android ब्रिज द्वारा रिवॉर्ड मिलने पर कॉल होगा
     window.adRewardCompleted = function() {
         adsWatched++;
         addLog(`✅ ऐड सफलतापूर्वक पूरा देखा गया (${adsWatched}/${TOTAL_ADS_REQUIRED})`);
@@ -199,7 +209,7 @@
         }, 1000);
     }
 
-    // Google Fit Auth
+    // Google Fit Auth Flow
     function extractTokenFromUrl() {
         const hash = window.location.hash.substring(1);
         const params = new URLSearchParams(hash);
@@ -219,10 +229,8 @@
     }
 
     function loginGoogleFit() {
-        const clientId = "580649721798-h53e28v42c92eamf6u5654g39qkgff1m.apps.googleusercontent.com";
-        const redirectUri = "https://fitstep-boost.github.io/fitstep/";
-        const scope = encodeURIComponent("https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email");
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+        const scope = encodeURIComponent("https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/userinfo.email openid");
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${scope}`;
         window.location.href = authUrl;
     }
 
@@ -236,12 +244,24 @@
             return res.json();
         })
         .then(data => {
-            userEmail = data.email;
+            userEmail = data.email.toLowerCase().trim();
             document.getElementById('user-email').innerText = userEmail;
             document.getElementById('auth-buttons').style.display = 'flex';
             document.getElementById('btn-login').style.display = 'none';
             addLog(`अकाउंट: <b>${userEmail}</b>`);
-            addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
+
+            // Whitelist Check
+            addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
+            const isApproved = WHITELISTED_EMAILS.some(e => e.toLowerCase() === userEmail);
+
+            if (isApproved) {
+                addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
+                document.getElementById('flow-area').style.display = 'block';
+                updateAdStatusUI();
+            } else {
+                addLog("⛔ <b>अनुमति अस्वीकृत:</b> यह ईमेल एडमिन द्वारा स्वीकृत नहीं है।");
+                document.getElementById('flow-area').style.display = 'none';
+            }
         })
         .catch(err => {
             sessionStorage.removeItem('gf_token');
@@ -253,6 +273,7 @@
         document.getElementById('user-email').innerText = "लॉगिन नहीं है";
         document.getElementById('auth-buttons').style.display = 'none';
         document.getElementById('btn-login').style.display = 'block';
+        document.getElementById('flow-area').style.display = 'none';
     }
 
     function signOutUser() {
@@ -297,7 +318,7 @@
             addLog("✅ <b>बधाई! 6,500 स्टेप्स और 45 हार्ट पॉइंट्स सफलतापूर्वक Google Fit में दर्ज हो गए हैं।</b>");
             btnSync.innerText = "सिंक पूर्ण हुआ ✔";
 
-            // Trigger Interstitial Ad ONLY after successful sync
+            // सिंक सफल होने पर Interstitial Ad
             setTimeout(() => {
                 if (window.AndroidBridge && window.AndroidBridge.showInterstitialAd) {
                     window.AndroidBridge.showInterstitialAd();
@@ -378,7 +399,6 @@
 
     window.onload = function() {
         extractTokenFromUrl();
-        updateAdStatusUI();
     };
 </script>
 </body>
