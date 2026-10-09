@@ -8,10 +8,12 @@ android {
 
     defaultConfig {
         applicationId "com.fitstep.boost"
-        minSdk 21
+        minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -21,8 +23,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
@@ -30,5 +32,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.annotation:annotation:1.7.1'
     implementation 'com.google.android.gms:play-services-ads:23.0.0'
+    implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
     implementation 'com.unity3d.ads:unity-ads:4.12.2'
 }
