@@ -22,9 +22,9 @@ import com.unity3d.ads.UnityAdsShowOptions;
 public class MainActivity extends AppCompatActivity {
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
-    // Unity Ads Config
-    private static final String UNITY_GAME_ID = "800391367";
-    private static final String UNITY_PLACEMENT_ID = "BP_Rewarded_Android";
+    // Unity Official Global Test IDs for Verification
+    private static final String UNITY_GAME_ID = "1486550";
+    private static final String UNITY_PLACEMENT_ID = "Rewarded_Android";
     private static final boolean UNITY_TEST_MODE = true;
 
     private FrameLayout rootContainer;
@@ -94,7 +94,7 @@ public class MainActivity extends AppCompatActivity {
         mainWebView.setWebViewClient(new WebViewClient());
         mainWebView.loadUrl(HOSTED_WEB_URL);
 
-        // Unity Ads Initialize directly in onCreate with ApplicationContext
+        // Initialize Unity Ads with Application Context
         UnityAds.initialize(getApplicationContext(), UNITY_GAME_ID, UNITY_TEST_MODE, new IUnityAdsInitializationListener() {
             @Override
             public void onInitializationComplete() {
