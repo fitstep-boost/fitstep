@@ -155,7 +155,6 @@
           </div>
         </div>
 
-        <!-- तारीख चुनने का विकल्प (1 महीना पुराना तक) -->
         <div class="date-picker-box">
           <label class="date-picker-label" for="syncDateInput">📅 सिंक की तारीख चुनें (डिफ़ॉल्ट: आज):</label>
           <input type="date" id="syncDateInput" class="date-input">
@@ -187,6 +186,9 @@
     const APP_VERSION = "1.0";
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
+    
+    // एडमिन ईमेल (असीमित बैक-डेट एक्सेस)
+    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
 
     let tokenClient;
     let accessToken = null;
@@ -212,7 +214,6 @@
       }
     }
 
-    // कैलेंडर सेट करना: आज की डिफ़ॉल्ट तारीख और 30 दिन पुरानी लिमिट
     function setupDatePicker() {
       const dateInput = document.getElementById("syncDateInput");
       const today = new Date();
@@ -385,8 +386,7 @@
         remaining--;
       }, 1000);
     }
-
-    function showFinalCompletionScreen() {
+        function showFinalCompletionScreen() {
       document.getElementById("activeContent").style.display = "none";
       document.getElementById("completionMessageCard").style.display = "block";
     }
@@ -442,8 +442,8 @@
       return null;
     }
 
-    // चुने गए दिन के कुल स्टेप्स और एक्टिव मिनट्स की जांच
-    async function checkDailyStepsAndActiveMinutes(startMillis, endMillis) {
+    // सख्त फ़िल्टर: किसी भी तरह का रिकॉर्ड (0 steps भी) होने पर उस मिनट को लॉक करना
+    async function checkDailyStepsAndOccupiedMinutes(startMillis, endMillis) {
       let totalDaySteps = 0;
       const occupiedMinutes = new Set();
       try {
@@ -460,17 +460,14 @@
         const data = await res.json();
         if (data && data.bucket) {
           for (let b of data.bucket) {
-            let steps = 0;
-            if (b.dataset && b.dataset[0] && b.dataset[0].point) {
+            let bucketStartMin = Math.floor(parseInt(b.startTimeMillis) / 60000);
+            if (b.dataset && b.dataset[0] && b.dataset[0].point && b.dataset[0].point.length > 0) {
+              occupiedMinutes.add(bucketStartMin);
               for (let pt of b.dataset[0].point) {
                 if (pt.value && pt.value[0] && pt.value[0].intVal) {
-                  steps += pt.value[0].intVal;
+                  totalDaySteps += pt.value[0].intVal;
                 }
               }
-            }
-            if (steps > 0) {
-              totalDaySteps += steps;
-              occupiedMinutes.add(Math.floor(parseInt(b.startTimeMillis) / 60000));
             }
           }
         }
@@ -482,7 +479,6 @@
       const syncBtn = document.getElementById("syncBtn");
       syncBtn.disabled = true;
 
-      // 1. तारीख का निर्धारण
       const dateInput = document.getElementById("syncDateInput").value;
       const [year, month, day] = dateInput.split('-').map(Number);
       
@@ -492,11 +488,30 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const isToday = (dateInput === todayStr);
 
+      // --- 24-घंटे बैक-डेट सीमा जाँच (Sunil Sehrawat56@gmail.com बाइपास) ---
+      const isAdmin = (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+
+      if (!isToday && !isAdmin) {
+        const lastBackdateKey = "fitstep_last_backdate_" + userEmail;
+        const lastBackdateTime = localStorage.getItem(lastBackdateKey);
+        const nowMs = Date.now();
+
+        if (lastBackdateTime) {
+          const diffHours = (nowMs - parseInt(lastBackdateTime)) / (1000 * 60 * 60);
+          if (diffHours < 24) {
+            const waitHours = Math.ceil(24 - diffHours);
+            addLog(`⛔ <b>सीमा लागू:</b> आप आज पहले ही एक पिछली तारीख में स्टेप अपडेट कर चुके हैं।`);
+            alert(`आप आज पहले ही किसी पिछली तारीख में स्टेप्स अपडेट कर चुके हैं!\n24 घंटे में केवल 1 बैक-डेट एंट्री की अनुमति है।\nकृपया ${waitHours} घंटे बाद प्रयास करें या आज की तारीख सिंक करें।`);
+            syncBtn.disabled = false;
+            return;
+          }
+        }
+      }
+
       addLog(`📅 चुनी गई तारीख: <b>${dateInput}</b>`);
       addLog("जाँच जारी है: क्या इस दिन 10,000 स्टेप्स पहले से मौजूद हैं?...");
 
-      // 2. 10,000 स्टेप्स प्री-चेक
-      const { totalDaySteps, occupiedMinutes } = await checkDailyStepsAndActiveMinutes(dayStart, dayEnd);
+      const { totalDaySteps, occupiedMinutes } = await checkDailyStepsAndOccupiedMinutes(dayStart, dayEnd);
       addLog(`मौजूदा कुल स्टेप्स: <b>${totalDaySteps}</b>`);
 
       if (totalDaySteps >= 10000) {
@@ -521,16 +536,16 @@
 
       addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
 
-      // 3. टाइम कर्सर सेट करना (आज है तो ताज़ा समय, पुरानी तारीख है तो सुबह 10:00 AM)
       let endCursorTime;
       if (isToday) {
-        endCursorTime = Date.now() - (5 * 60 * 1000); // 5 मिनट पहले
+        let now = Date.now();
+        endCursorTime = Math.floor((now - (5 * 60 * 1000)) / 60000) * 60000;
       } else {
-        endCursorTime = new Date(year, month - 1, day, 10, 0, 0).getTime(); // सुबह 10:00 AM
+        endCursorTime = new Date(year, month - 1, day, 10, 0, 0, 0).getTime();
       }
 
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
-      const targetMaxHeartPoints = Math.floor(Math.random() * (48 - 36 + 1)) + 36; // 36 से 48 हार्ट पॉइंट्स
+      const targetMaxHeartPoints = Math.floor(Math.random() * (48 - 36 + 1)) + 36;
       
       let stepPoints = [];
       let calPoints = [];
@@ -545,13 +560,11 @@
       while (stepsRemaining > 0 && currentTimeCursor > dayStart) {
         let currentMinuteIndex = Math.floor(currentTimeCursor / 60000);
 
-        // कोलिजन प्रिवेंशन: अगर उस मिनट में पहले से हलचल थी, तो छोड़ें
         if (occupiedMinutes.has(currentMinuteIndex)) {
           currentTimeCursor -= (60 * 1000);
           continue;
         }
 
-          // 40 से 80 स्टेप्स प्रति मिनट की स्वाभाविक गति
         let stepThisMinute = Math.floor(Math.random() * (80 - 40 + 1)) + 40;
         if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
@@ -590,7 +603,6 @@
           });
         }
 
-        // 36 से 48 की सुरक्षित रेंज में हार्ट पॉइंट्स
         if (heartStreamId && stepThisMinute >= 48 && totalHeartPts < targetMaxHeartPoints) {
           heartPoints.push({
             startTimeNanos: startNs,
@@ -656,6 +668,10 @@
         addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज।");
         addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
+
+        if (!isToday && !isAdmin) {
+          localStorage.setItem("fitstep_last_backdate_" + userEmail, Date.now().toString());
+        }
 
         setTimeout(() => {
           if (window.AndroidBridge && typeof window.AndroidBridge.showInterstitialAd === "function") {
