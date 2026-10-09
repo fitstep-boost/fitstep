@@ -29,12 +29,12 @@
       position: relative;
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #38bdf8; }
-    p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 22px; }
+    p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 18px; }
     .user-box {
       background: #0f172a;
       border-radius: 12px;
       padding: 14px;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       font-size: 13px;
       word-break: break-all;
     }
@@ -44,6 +44,31 @@
       display: flex;
       gap: 8px;
       justify-content: center;
+    }
+    .date-picker-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    .date-picker-label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .date-input {
+      width: 100%;
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #0284c7;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
     }
     .btn {
       width: 100%;
@@ -130,6 +155,12 @@
           </div>
         </div>
 
+        <!-- तारीख चुनने का विकल्प (1 महीना पुराना तक) -->
+        <div class="date-picker-box">
+          <label class="date-picker-label" for="syncDateInput">📅 सिंक की तारीख चुनें (डिफ़ॉल्ट: आज):</label>
+          <input type="date" id="syncDateInput" class="date-input">
+        </div>
+
         <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
         <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
         <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
@@ -181,7 +212,27 @@
       }
     }
 
+    // कैलेंडर सेट करना: आज की डिफ़ॉल्ट तारीख और 30 दिन पुरानी लिमिट
+    function setupDatePicker() {
+      const dateInput = document.getElementById("syncDateInput");
+      const today = new Date();
+      const past30Days = new Date();
+      past30Days.setDate(today.getDate() - 30);
+
+      const formatDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      dateInput.value = formatDate(today);
+      dateInput.max = formatDate(today);
+      dateInput.min = formatDate(past30Days);
+    }
+
     window.onload = function() {
+      setupDatePicker();
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
@@ -299,13 +350,12 @@
       }, 1000);
     }
 
-    function getDynamicWalkTitle() {
-      const currentHour = new Date().getHours();
-      if (currentHour >= 4 && currentHour < 12) {
+    function getDynamicWalkTitle(hour) {
+      if (hour >= 4 && hour < 12) {
         return "Morning walk";
-      } else if (currentHour >= 12 && currentHour < 17) {
+      } else if (hour >= 12 && hour < 17) {
         return "Afternoon walk";
-      } else if (currentHour >= 17 && currentHour < 21) {
+      } else if (hour >= 17 && hour < 21) {
         return "Evening walk";
       } else {
         return "Night walk";
@@ -392,8 +442,9 @@
       return null;
     }
 
-    // एंटी-कोलिजन: मौजूदा एक्टिव मिनट्स की जांच
-    async function getExistingActiveMinutes(startMillis, endMillis) {
+    // चुने गए दिन के कुल स्टेप्स और एक्टिव मिनट्स की जांच
+    async function checkDailyStepsAndActiveMinutes(startMillis, endMillis) {
+      let totalDaySteps = 0;
       const occupiedMinutes = new Set();
       try {
         const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
@@ -418,16 +469,43 @@
               }
             }
             if (steps > 0) {
+              totalDaySteps += steps;
               occupiedMinutes.add(Math.floor(parseInt(b.startTimeMillis) / 60000));
             }
           }
         }
       } catch (e) {}
-      return occupiedMinutes;
+      return { totalDaySteps, occupiedMinutes };
     }
 
     async function syncSteps() {
-      document.getElementById("syncBtn").disabled = true;
+      const syncBtn = document.getElementById("syncBtn");
+      syncBtn.disabled = true;
+
+      // 1. तारीख का निर्धारण
+      const dateInput = document.getElementById("syncDateInput").value;
+      const [year, month, day] = dateInput.split('-').map(Number);
+      
+      const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+      const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isToday = (dateInput === todayStr);
+
+      addLog(`📅 चुनी गई तारीख: <b>${dateInput}</b>`);
+      addLog("जाँच जारी है: क्या इस दिन 10,000 स्टेप्स पहले से मौजूद हैं?...");
+
+      // 2. 10,000 स्टेप्स प्री-चेक
+      const { totalDaySteps, occupiedMinutes } = await checkDailyStepsAndActiveMinutes(dayStart, dayEnd);
+      addLog(`मौजूदा कुल स्टेप्स: <b>${totalDaySteps}</b>`);
+
+      if (totalDaySteps >= 10000) {
+        addLog("⛔ <b>सिंक निरस्त:</b> इस तारीख पर पहले से 10,000+ स्टेप्स पूर्ण हैं। कोई अतिरिक्त एंट्री नहीं की गई।");
+        alert(`इस तारीख (${dateInput}) पर पहले से ${totalDaySteps} स्टेप्स दर्ज हैं! कोई नई एंट्री नहीं होगी।`);
+        syncBtn.disabled = false;
+        return;
+      }
+
       addLog("सेंसर डेटासोर्स तैयार किए जा रहे हैं...");
 
       const stepStreamId = await getOrCreateDataSource("com.google.step_count.delta", "steps", "integer", "HardwareStepsStream");
@@ -437,22 +515,23 @@
 
       if (!stepStreamId) {
         addLog("❌ डेटासोर्स कनेक्शन त्रुटि, कृपया दोबारा प्रयास करें।");
-        document.getElementById("syncBtn").disabled = false;
+        syncBtn.disabled = false;
         return;
       }
 
       addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
-      addLog("फोन की मौजूदा गतिविधि जाँची जा रही है...");
+
+      // 3. टाइम कर्सर सेट करना (आज है तो ताज़ा समय, पुरानी तारीख है तो सुबह 10:00 AM)
+      let endCursorTime;
+      if (isToday) {
+        endCursorTime = Date.now() - (5 * 60 * 1000); // 5 मिनट पहले
+      } else {
+        endCursorTime = new Date(year, month - 1, day, 10, 0, 0).getTime(); // सुबह 10:00 AM
+      }
 
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
-      const now = Date.now();
-      const lookbackHours = 4;
-      const windowStartMillis = now - (lookbackHours * 60 * 60 * 1000);
-
-      // फोन के वास्तविक एक्टिव मिनट्स को सुरक्षित करना
-      const occupiedMinutes = await getExistingActiveMinutes(windowStartMillis, now);
-      addLog(`🔍 ${occupiedMinutes.size} मिनट पहले से एक्टिव मिले (उन्हें सुरक्षित रखा गया है)।`);
-
+      const targetMaxHeartPoints = Math.floor(Math.random() * (48 - 36 + 1)) + 36; // 36 से 48 हार्ट पॉइंट्स
+      
       let stepPoints = [];
       let calPoints = [];
       let distPoints = [];
@@ -460,20 +539,19 @@
       let stepsRemaining = targetTotalSteps;
       let totalHeartPts = 0;
 
-      let minuteOffset = 5 * 60 * 1000;
-      let currentTimeCursor = now - minuteOffset;
+      let currentTimeCursor = endCursorTime;
       let earliestTimeMillis = currentTimeCursor;
 
-      while (stepsRemaining > 0 && currentTimeCursor > windowStartMillis) {
+      while (stepsRemaining > 0 && currentTimeCursor > dayStart) {
         let currentMinuteIndex = Math.floor(currentTimeCursor / 60000);
 
-        // पहले से चले गए मिनटों को स्किप करना
+        // कोलिजन प्रिवेंशन: अगर उस मिनट में पहले से हलचल थी, तो छोड़ें
         if (occupiedMinutes.has(currentMinuteIndex)) {
           currentTimeCursor -= (60 * 1000);
           continue;
         }
 
-        // 40 से 80 स्टेप्स प्रति मिनट की स्वाभाविक गति
+          // 40 से 80 स्टेप्स प्रति मिनट की स्वाभाविक गति
         let stepThisMinute = Math.floor(Math.random() * (80 - 40 + 1)) + 40;
         if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
@@ -512,7 +590,7 @@
           });
         }
 
-                let targetMaxHeartPoints = Math.floor(Math.random() * (48 - 36 + 1)) + 36;
+        // 36 से 48 की सुरक्षित रेंज में हार्ट पॉइंट्स
         if (heartStreamId && stepThisMinute >= 48 && totalHeartPts < targetMaxHeartPoints) {
           heartPoints.push({
             startTimeNanos: startNs,
@@ -527,7 +605,7 @@
       }
 
       let overallStartTimeMillis = earliestTimeMillis;
-      let overallEndTimeMillis = now - minuteOffset;
+      let overallEndTimeMillis = endCursorTime;
       const overallStartNs = (BigInt(overallStartTimeMillis) * BigInt(1000000)).toString();
       const overallEndNs = (BigInt(overallEndTimeMillis) * BigInt(1000000)).toString();
       const datasetId = overallStartNs + "-" + overallEndNs;
@@ -570,7 +648,8 @@
       if (stepRes.ok) {
         const totalCals = Math.round(targetTotalSteps * 0.0415);
         const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
-        const walkTitle = getDynamicWalkTitle();
+        const sessionHour = new Date(endCursorTime).getHours();
+        const walkTitle = getDynamicWalkTitle(sessionHour);
 
         addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
         addLog("❤️ <b>" + totalHeartPts + " हार्ट पॉइंट्स</b> क्रेडिट हुए!");
@@ -589,7 +668,7 @@
       } else {
         const errJson = await stepRes.json().catch(() => ({}));
         addLog("❌ सिंक त्रुटि: " + (errJson.error?.message || "अनुरोध विफल रहा।"));
-        document.getElementById("syncBtn").disabled = false;
+        syncBtn.disabled = false;
       }
     }
 
