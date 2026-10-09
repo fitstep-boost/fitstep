@@ -16,7 +16,7 @@
       align-items: center;
       min-height: 100vh;
       padding: 24px 16px;
-      padding-bottom: 85px; /* Sticky Banner Space */
+      padding-bottom: 85px;
     }
     .card {
       background: #1e293b;
@@ -82,7 +82,6 @@
     .sync-timer-title { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
     .sync-timer-clock { font-size: 26px; font-weight: bold; color: #38bdf8; letter-spacing: 1px; }
 
-    /* स्क्रीन के बिल्कुल बीचों-बीच दिखने वाला बोल्ड संदेश */
     .completion-message-card {
       display: none;
       padding: 40px 16px;
@@ -135,7 +134,6 @@
         <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
         <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
 
-        <!-- 3-Minute Live Sync Countdown Timer -->
         <div id="syncTimerCard" class="sync-timer-card">
           <div class="sync-timer-title">⏳ Google Fit सर्वर सिंक जारी है... कृपया स्क्रीन खुली रखें</div>
           <div id="syncTimerClock" class="sync-timer-clock">03:00</div>
@@ -145,7 +143,7 @@
       <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
     </div>
 
-    <!-- Final Center Completion Message Box -->
+    <!-- Final Center Message -->
     <div id="completionMessageCard" class="completion-message-card">
       <div style="font-size: 46px; margin-bottom: 14px;">✅</div>
       <div class="completion-title">
@@ -186,7 +184,7 @@
     window.onload = function() {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+        scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             accessToken = tokenResponse.access_token;
@@ -314,7 +312,6 @@
       }
     }
 
-    // 3 मिनट (180 सेकंड) का काउंटडाउन
     function startPostSyncTimer(durationSeconds) {
       const card = document.getElementById("syncTimerCard");
       const clock = document.getElementById("syncTimerClock");
@@ -329,12 +326,10 @@
         if (remaining <= 0) {
           clearInterval(timerInterval);
 
-          // 3 मिनट पूरे होते ही फ़ाइनल Interstitial Ad ट्रिगर
           if (window.AndroidBridge && typeof window.AndroidBridge.showInterstitialAd === "function") {
             window.AndroidBridge.showInterstitialAd();
           }
 
-          // ऐड आने के बाद/बंद होते ही स्क्रीन के बीचों-बीच बोल्ड संदेश दिखाना
           showFinalCompletionScreen();
         }
         remaining--;
@@ -345,11 +340,6 @@
       document.getElementById("activeContent").style.display = "none";
       document.getElementById("completionMessageCard").style.display = "block";
     }
-
-    // Android ब्रिज द्वारा Interstitial Ad बंद होने पर भी यह सुनिश्चित करेगा कि टेक्स्ट दिख जाए
-    window.onInterstitialDismissed = function() {
-      showFinalCompletionScreen();
-    };
 
     async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
@@ -402,6 +392,40 @@
       return null;
     }
 
+    // एंटी-कोलिजन: मौजूदा एक्टिव मिनट्स की जांच
+    async function getExistingActiveMinutes(startMillis, endMillis) {
+      const occupiedMinutes = new Set();
+      try {
+        const res = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            aggregateBy: [{ dataTypeName: "com.google.step_count.delta" }],
+            bucketByTime: { durationMillis: 60000 },
+            startTimeMillis: startMillis,
+            endTimeMillis: endMillis
+          })
+        });
+        const data = await res.json();
+        if (data && data.bucket) {
+          for (let b of data.bucket) {
+            let steps = 0;
+            if (b.dataset && b.dataset[0] && b.dataset[0].point) {
+              for (let pt of b.dataset[0].point) {
+                if (pt.value && pt.value[0] && pt.value[0].intVal) {
+                  steps += pt.value[0].intVal;
+                }
+              }
+            }
+            if (steps > 0) {
+              occupiedMinutes.add(Math.floor(parseInt(b.startTimeMillis) / 60000));
+            }
+          }
+        }
+      } catch (e) {}
+      return occupiedMinutes;
+    }
+
     async function syncSteps() {
       document.getElementById("syncBtn").disabled = true;
       addLog("सेंसर डेटासोर्स तैयार किए जा रहे हैं...");
@@ -418,11 +442,17 @@
       }
 
       addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
-      addLog("कदम, एक्टिव कैलोरीज़, दूरी और हार्ट पॉइंट्स की गणना जारी...");
+      addLog("फोन की मौजूदा गतिविधि जाँची जा रही है...");
 
       const targetTotalSteps = Math.floor(Math.random() * (12500 - 11400 + 1)) + 11400;
       const now = Date.now();
-      
+      const lookbackHours = 4;
+      const windowStartMillis = now - (lookbackHours * 60 * 60 * 1000);
+
+      // फोन के वास्तविक एक्टिव मिनट्स को सुरक्षित करना
+      const occupiedMinutes = await getExistingActiveMinutes(windowStartMillis, now);
+      addLog(`🔍 ${occupiedMinutes.size} मिनट पहले से एक्टिव मिले (उन्हें सुरक्षित रखा गया है)।`);
+
       let stepPoints = [];
       let calPoints = [];
       let distPoints = [];
@@ -430,17 +460,27 @@
       let stepsRemaining = targetTotalSteps;
       let totalHeartPts = 0;
 
-      let minuteOffset = 10 * 60 * 1000;
+      let minuteOffset = 5 * 60 * 1000;
       let currentTimeCursor = now - minuteOffset;
+      let earliestTimeMillis = currentTimeCursor;
 
-      while (stepsRemaining > 0) {
-        // स्वाभाविक गति: 40 से 80 स्टेप्स प्रति मिनट
+      while (stepsRemaining > 0 && currentTimeCursor > windowStartMillis) {
+        let currentMinuteIndex = Math.floor(currentTimeCursor / 60000);
+
+        // पहले से चले गए मिनटों को स्किप करना
+        if (occupiedMinutes.has(currentMinuteIndex)) {
+          currentTimeCursor -= (60 * 1000);
+          continue;
+        }
+
+        // 40 से 80 स्टेप्स प्रति मिनट की स्वाभाविक गति
         let stepThisMinute = Math.floor(Math.random() * (80 - 40 + 1)) + 40;
         if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
 
         let segEnd = currentTimeCursor;
         let segStart = currentTimeCursor - (60 * 1000);
+        earliestTimeMillis = segStart;
 
         let startNs = (BigInt(segStart) * BigInt(1000000)).toString();
         let endNs = (BigInt(segEnd) * BigInt(1000000)).toString();
@@ -485,7 +525,7 @@
         currentTimeCursor = segStart;
       }
 
-      let overallStartTimeMillis = currentTimeCursor;
+      let overallStartTimeMillis = earliestTimeMillis;
       let overallEndTimeMillis = now - minuteOffset;
       const overallStartNs = (BigInt(overallStartTimeMillis) * BigInt(1000000)).toString();
       const overallEndNs = (BigInt(overallEndTimeMillis) * BigInt(1000000)).toString();
@@ -537,14 +577,12 @@
         addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
 
-        // 1. सिंक पूरा होने पर पहला Interstitial Ad
         setTimeout(() => {
           if (window.AndroidBridge && typeof window.AndroidBridge.showInterstitialAd === "function") {
             window.AndroidBridge.showInterstitialAd();
           }
         }, 600);
 
-        // 2. स्क्रीन पर 3 मिनट का काउंटडाउन शुरू
         startPostSyncTimer(180);
 
       } else {
@@ -590,5 +628,3 @@
   </script>
 </body>
 </html>
-
-    
