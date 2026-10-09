@@ -512,7 +512,8 @@
           });
         }
 
-        if (heartStreamId && stepThisMinute >= 55) {
+                let targetMaxHeartPoints = Math.floor(Math.random() * (48 - 36 + 1)) + 36;
+        if (heartStreamId && stepThisMinute >= 48 && totalHeartPts < targetMaxHeartPoints) {
           heartPoints.push({
             startTimeNanos: startNs,
             endTimeNanos: endNs,
