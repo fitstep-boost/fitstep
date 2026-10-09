@@ -35,10 +35,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
-    protected void enlargementFix() {}
-
-    @Override
-    @SuppressLint("SetJavaScriptEnabled")
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
