@@ -16,7 +16,7 @@
       align-items: center;
       min-height: 100vh;
       padding: 24px 16px;
-      padding-bottom: 80px; /* Space for Sticky Banner */
+      padding-bottom: 85px; /* Sticky Banner Space */
     }
     .card {
       background: #1e293b;
@@ -26,6 +26,7 @@
       padding: 26px 20px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       text-align: center;
+      position: relative;
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #38bdf8; }
     p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 22px; }
@@ -68,6 +69,32 @@
     .btn-refresh { background: #0284c7; color: #fff; padding: 7px 14px; font-size: 12px; border-radius: 8px; width: auto; }
     .btn:disabled { background: #1e293b; border: 1px solid #334155; color: #475569; cursor: not-allowed; }
     .ad-counter-text { font-size: 13px; color: #38bdf8; margin-bottom: 16px; font-weight: 500; }
+    
+    .sync-timer-card {
+      background: #0f172a;
+      border: 1px solid #0284c7;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 10px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .sync-timer-title { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+    .sync-timer-clock { font-size: 26px; font-weight: bold; color: #38bdf8; letter-spacing: 1px; }
+
+    /* स्क्रीन के बिल्कुल बीचों-बीच दिखने वाला बोल्ड संदेश */
+    .completion-message-card {
+      display: none;
+      padding: 40px 16px;
+      text-align: center;
+    }
+    .completion-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #4ade80;
+      line-height: 1.6;
+    }
+
     .status-text {
       background: #0f172a;
       border-radius: 12px;
@@ -85,30 +112,46 @@
 </head>
 <body>
 
-  <div class="card">
-    <h1>FitStep Tracker</h1>
-    <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
+  <div class="card" id="mainCard">
+    <div id="activeContent">
+      <h1>FitStep Tracker</h1>
+      <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
 
-    <div id="loginSection">
-      <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
-    </div>
+      <div id="loginSection">
+        <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
+      </div>
 
-    <div id="appSection" style="display: none;">
-      <div class="user-box">
-        <div class="user-label">लॉगिन अकाउंट</div>
-        <div id="userEmailText" class="user-email"></div>
-        <div class="btn-row">
-          <button class="btn btn-refresh" onclick="verifyWhitelist(userEmail)">स्थिति रिफ्रेश करें 🔄</button>
-          <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
+      <div id="appSection" style="display: none;">
+        <div class="user-box">
+          <div class="user-label">लॉगिन अकाउंट</div>
+          <div id="userEmailText" class="user-email"></div>
+          <div class="btn-row">
+            <button class="btn btn-refresh" onclick="verifyWhitelist(userEmail)">स्थिति रिफ्रेश करें 🔄</button>
+            <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
+          </div>
+        </div>
+
+        <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
+        <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
+        <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
+
+        <!-- 3-Minute Live Sync Countdown Timer -->
+        <div id="syncTimerCard" class="sync-timer-card">
+          <div class="sync-timer-title">⏳ Google Fit सर्वर सिंक जारी है... कृपया स्क्रीन खुली रखें</div>
+          <div id="syncTimerClock" class="sync-timer-clock">03:00</div>
         </div>
       </div>
 
-      <button id="adBtn" class="btn btn-ad" onclick="playAd()" disabled>ऐड्स देखें और सिंक शुरू करें (0/5)</button>
-      <div id="adCounter" class="ad-counter-text">देखे गए ऐड्स: 0 / 5</div>
-      <button id="syncBtn" class="btn btn-sync" onclick="syncSteps()" disabled>स्टेप्स सिंक करें</button>
+      <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
     </div>
 
-    <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
+    <!-- Final Center Completion Message Box -->
+    <div id="completionMessageCard" class="completion-message-card">
+      <div style="font-size: 46px; margin-bottom: 14px;">✅</div>
+      <div class="completion-title">
+        अब आप इस ऐप को बंद कर सकते हैं।<br>आपके सारे स्टेप लोड हो गए हैं।
+      </div>
+    </div>
   </div>
 
   <script>
@@ -125,8 +168,10 @@
 
     function addLog(msg) {
       const box = document.getElementById("statusBox");
-      box.innerHTML += "<br>" + msg;
-      box.scrollTop = box.scrollHeight;
+      if (box) {
+        box.innerHTML += "<br>" + msg;
+        box.scrollTop = box.scrollHeight;
+      }
     }
 
     function enableAdButton() {
@@ -256,6 +301,56 @@
       }, 1000);
     }
 
+    function getDynamicWalkTitle() {
+      const currentHour = new Date().getHours();
+      if (currentHour >= 4 && currentHour < 12) {
+        return "Morning walk";
+      } else if (currentHour >= 12 && currentHour < 17) {
+        return "Afternoon walk";
+      } else if (currentHour >= 17 && currentHour < 21) {
+        return "Evening walk";
+      } else {
+        return "Night walk";
+      }
+    }
+
+    // 3 मिनट (180 सेकंड) का काउंटडाउन
+    function startPostSyncTimer(durationSeconds) {
+      const card = document.getElementById("syncTimerCard");
+      const clock = document.getElementById("syncTimerClock");
+      card.style.display = "block";
+      let remaining = durationSeconds;
+
+      const timerInterval = setInterval(() => {
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        clock.innerText = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+
+          // 3 मिनट पूरे होते ही फ़ाइनल Interstitial Ad ट्रिगर
+          if (window.AndroidBridge && typeof window.AndroidBridge.showInterstitialAd === "function") {
+            window.AndroidBridge.showInterstitialAd();
+          }
+
+          // ऐड आने के बाद/बंद होते ही स्क्रीन के बीचों-बीच बोल्ड संदेश दिखाना
+          showFinalCompletionScreen();
+        }
+        remaining--;
+      }, 1000);
+    }
+
+    function showFinalCompletionScreen() {
+      document.getElementById("activeContent").style.display = "none";
+      document.getElementById("completionMessageCard").style.display = "block";
+    }
+
+    // Android ब्रिज द्वारा Interstitial Ad बंद होने पर भी यह सुनिश्चित करेगा कि टेक्स्ट दिख जाए
+    window.onInterstitialDismissed = function() {
+      showFinalCompletionScreen();
+    };
+
     async function getOrCreateDataSource(dataTypeName, fieldName, formatType, streamName) {
       const payload = {
         dataStreamName: streamName,
@@ -335,11 +430,12 @@
       let stepsRemaining = targetTotalSteps;
       let totalHeartPts = 0;
 
-      let minuteOffset = 15 * 60 * 1000;
+      let minuteOffset = 10 * 60 * 1000;
       let currentTimeCursor = now - minuteOffset;
 
       while (stepsRemaining > 0) {
-        let stepThisMinute = Math.floor(Math.random() * (110 - 85 + 1)) + 85;
+        // स्वाभाविक गति: 40 से 80 स्टेप्स प्रति मिनट
+        let stepThisMinute = Math.floor(Math.random() * (80 - 40 + 1)) + 40;
         if (stepsRemaining < stepThisMinute) stepThisMinute = stepsRemaining;
         stepsRemaining -= stepThisMinute;
 
@@ -376,7 +472,7 @@
           });
         }
 
-        if (heartStreamId) {
+        if (heartStreamId && stepThisMinute >= 55) {
           heartPoints.push({
             startTimeNanos: startNs,
             endTimeNanos: endNs,
@@ -433,18 +529,23 @@
       if (stepRes.ok) {
         const totalCals = Math.round(targetTotalSteps * 0.0415);
         const totalKm = ((targetTotalSteps * 0.76) / 1000).toFixed(2);
+        const walkTitle = getDynamicWalkTitle();
+
         addLog("✅ <b>" + targetTotalSteps + " स्टेप्स</b> सफलतापूर्वक दर्ज!");
         addLog("❤️ <b>" + totalHeartPts + " हार्ट पॉइंट्स</b> क्रेडिट हुए!");
         addLog("🔥 <b>" + totalCals + " kcal</b> एक्टिव कैलोरीज़ दर्ज।");
         addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
-        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps);
+        createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
 
-        // सिंक सफल होने के बाद Interstitial Ad ट्रिगर
+        // 1. सिंक पूरा होने पर पहला Interstitial Ad
         setTimeout(() => {
           if (window.AndroidBridge && typeof window.AndroidBridge.showInterstitialAd === "function") {
             window.AndroidBridge.showInterstitialAd();
           }
         }, 600);
+
+        // 2. स्क्रीन पर 3 मिनट का काउंटडाउन शुरू
+        startPostSyncTimer(180);
 
       } else {
         const errJson = await stepRes.json().catch(() => ({}));
@@ -453,7 +554,7 @@
       }
     }
 
-    function createSession(start, end, steps) {
+    function createSession(start, end, steps, sessionTitle) {
       const sessionId = "walk_" + start;
       fetch("https://www.googleapis.com/fitness/v1/users/me/sessions/" + sessionId, {
         method: "PUT",
@@ -463,8 +564,8 @@
         },
         body: JSON.stringify({
           id: sessionId,
-          name: "Outdoor Brisk Walk",
-          description: "Sensor tracked outdoor walking session",
+          name: sessionTitle,
+          description: "Walking activity",
           startTimeMillis: start,
           endTimeMillis: end,
           activeTimeMillis: (end - start),
@@ -473,7 +574,7 @@
         })
       })
       .then(() => {
-        addLog("✅ 'Outdoor Brisk Walk' सेशन रिकॉर्ड हो गया।");
+        addLog("✅ '" + sessionTitle + "' सेशन रिकॉर्ड हो गया।");
         logToSheet(steps);
       });
     }
@@ -489,3 +590,5 @@
   </script>
 </body>
 </html>
+
+    
