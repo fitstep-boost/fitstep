@@ -10,23 +10,24 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+
+// Start.io Imports
+import com.startapp.sdk.adsbase.StartAppAd;
+import com.startapp.sdk.adsbase.StartAppSDK;
+import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener;
+import com.startapp.sdk.adsbase.adlisteners.AdEventListener;
+import com.startapp.sdk.adsbase.adlisteners.VideoListener;
+import com.startapp.sdk.adsbase.Ad;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String LIVE_REWARDED_AD_UNIT_ID = "ca-app-pub-4526276681965606/8548376683";
+    private static final String STARTIO_APP_ID = "209703459";
     private static final String HOSTED_WEB_URL = "https://fitstep-boost.github.io/fitstep/";
 
     private FrameLayout rootContainer;
     private WebView mainWebView;
-    private RewardedAd mRewardedAd;
-    private boolean isAdLoading = false;
+    private StartAppAd startAppRewardedAd;
+    private boolean isStartIoLoading = false;
     private boolean showAdWhenLoaded = false;
 
     @Override
@@ -46,8 +47,12 @@ public class MainActivity extends AppCompatActivity {
         rootContainer.addView(mainWebView);
         setContentView(rootContainer);
 
-        MobileAds.initialize(this, initializationStatus -> {});
-        loadRewardedAd();
+        // Start.io SDK Initialization with Test Ads ON
+        StartAppSDK.init(this, STARTIO_APP_ID, false);
+        StartAppSDK.setTestAdsEnabled(true);
+
+        startAppRewardedAd = new StartAppAd(this);
+        loadStartIoRewardedAd();
 
         WebSettings webSettings = mainWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -93,54 +98,72 @@ public class MainActivity extends AppCompatActivity {
         mainWebView.loadUrl(HOSTED_WEB_URL);
     }
 
-    private void loadRewardedAd() {
-        if (mRewardedAd != null || isAdLoading) return;
-        isAdLoading = true;
-        AdRequest adRequest = new AdRequest.Builder().build();
-        RewardedAd.load(this, LIVE_REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
+    private void loadStartIoRewardedAd() {
+        if (isStartIoLoading) return;
+        isStartIoLoading = true;
+
+        startAppRewardedAd.loadAd(StartAppAd.AdMode.REWARDED_VIDEO, new AdEventListener() {
             @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                mRewardedAd = null;
-                isAdLoading = false;
-                if (showAdWhenLoaded) {
-                    showAdWhenLoaded = false;
-                    runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob एरर: " + loadAdError.getMessage() + " (Code: " + loadAdError.getCode() + ")');", null);
-                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                    });
-                }
+            public void onReceiveAd(Ad ad) {
+                isStartIoLoading = false;
+                runOnUiThread(() -> {
+                    mainWebView.evaluateJavascript("javascript:addLog('✅ Start.io टेस्ट ऐड लोड हो गया!');", null);
+                    if (showAdWhenLoaded) {
+                        showAdWhenLoaded = false;
+                        showStartIoAdNow();
+                    }
+                });
             }
 
             @Override
-            public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
-                mRewardedAd = rewardedAd;
-                isAdLoading = false;
-                if (showAdWhenLoaded) {
-                    showAdWhenLoaded = false;
-                    runOnUiThread(() -> showAdNow());
-                }
+            public void onFailedToReceiveAd(Ad ad) {
+                isStartIoLoading = false;
+                runOnUiThread(() -> {
+                    String err = (ad != null && ad.getErrorMessage() != null) ? ad.getErrorMessage() : "Unknown Error";
+                    mainWebView.evaluateJavascript("javascript:addLog('⚠️ Start.io लोड फ़ेल: " + err + "');", null);
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                });
             }
         });
     }
 
-    private void showAdNow() {
-        if (mRewardedAd != null) {
-            mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+    private void showStartIoAdNow() {
+        if (startAppRewardedAd.isReady()) {
+            startAppRewardedAd.setVideoListener(new VideoListener() {
                 @Override
-                public void onAdDismissedFullScreenContent() {
-                    mRewardedAd = null;
-                    loadRewardedAd();
+                public void onVideoCompleted() {
+                    runOnUiThread(() -> {
+                        mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
+                    });
+                }
+            });
+
+            startAppRewardedAd.showAd(new AdDisplayListener() {
+                @Override
+                public void adHidden(Ad ad) {
+                    loadStartIoRewardedAd();
                 }
 
                 @Override
-                public void onAdFailedToShowFullScreenContent(@NonNull com.google.android.gms.ads.AdError adError) {
-                    mRewardedAd = null;
-                    loadRewardedAd();
-                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                public void adDisplayed(Ad ad) {}
+
+                @Override
+                public void adClicked(Ad ad) {}
+
+                @Override
+                public void adNotDisplayed(Ad ad) {
+                    loadStartIoRewardedAd();
+                    runOnUiThread(() -> {
+                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ Start.io डिस्प्ले नहीं हो सका');", null);
+                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                    });
                 }
             });
-            mRewardedAd.show(MainActivity.this, rewardItem -> {
-                mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
+        } else {
+            showAdWhenLoaded = true;
+            loadStartIoRewardedAd();
+            runOnUiThread(() -> {
+                mainWebView.evaluateJavascript("javascript:addLog('⏳ Start.io ऐड लोड हो रहा है, कृपया रुकें...');", null);
             });
         }
     }
@@ -149,12 +172,12 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
-                if (mRewardedAd != null) {
-                    showAdNow();
+                if (startAppRewardedAd != null && startAppRewardedAd.isReady()) {
+                    showStartIoAdNow();
                 } else {
                     showAdWhenLoaded = true;
-                    loadRewardedAd();
-                    mainWebView.evaluateJavascript("javascript:addLog('⏳ लाइव ऐड लोड हो रहा है, कृपया 2-3 सेकंड रुकें...');", null);
+                    loadStartIoRewardedAd();
+                    mainWebView.evaluateJavascript("javascript:addLog('⏳ Start.io टेस्ट ऐड लोड हो रहा है...');", null);
                 }
             });
         }
