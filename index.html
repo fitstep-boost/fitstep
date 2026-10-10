@@ -30,6 +30,26 @@
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #38bdf8; }
     p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 18px; }
+    .input-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    .input-label { font-size: 12px; color: #94a3b8; margin-bottom: 6px; display: block; }
+    .text-input {
+      width: 100%;
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #0284c7;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
+    }
     .user-box {
       background: #0f172a;
       border-radius: 12px;
@@ -81,7 +101,8 @@
       margin-bottom: 12px;
       transition: all 0.2s;
     }
-    .btn-login { background: #0284c7; color: #fff; }
+    .btn-verify { background: #0284c7; color: #fff; }
+    .btn-login { background: #16a34a; color: #fff; }
     .btn-ad { background: #0284c7; color: #fff; }
     .btn-timer {
       background: #334155 !important;
@@ -141,16 +162,30 @@
       <h1>FitStep Tracker</h1>
       <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
 
-      <div id="loginSection">
+      <!-- ईमेल वेरिफिकेशन सेक्शन -->
+      <div id="verifySection">
+        <div class="input-box">
+          <label class="input-label" for="emailInput">अपना Google (Gmail) अकाउंट दर्ज करें:</label>
+          <input type="email" id="emailInput" class="text-input" placeholder="example@gmail.com">
+        </div>
+        <button id="verifyBtn" class="btn btn-verify" onclick="handleVerifyClick()">खाता सत्यापित करें</button>
+        <div id="pendingArea" style="display: none; margin-top: 10px;">
+          <button class="btn btn-refresh" style="width: 100%;" onclick="refreshStatusManually()">स्थिति रिफ्रेश करें 🔄</button>
+        </div>
+      </div>
+
+      <!-- Google Login सेक्शन (स्वीकृत होने पर ही खुलेगा) -->
+      <div id="loginSection" style="display: none;">
         <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
       </div>
 
+      <!-- मुख्य ऐप सेक्शन -->
       <div id="appSection" style="display: none;">
         <div class="user-box">
           <div class="user-label">लॉगिन अकाउंट</div>
           <div id="userEmailText" class="user-email"></div>
           <div class="btn-row">
-            <button class="btn btn-refresh" onclick="verifyWhitelist(userEmail)">स्थिति रिफ्रेश करें 🔄</button>
+            <button class="btn btn-refresh" onclick="refreshStatusManually()">स्थिति रिफ्रेश करें 🔄</button>
             <button class="btn btn-logout" onclick="logout()">साइन आउट (लॉगआउट)</button>
           </div>
         </div>
@@ -170,7 +205,7 @@
         </div>
       </div>
 
-      <div id="statusBox" class="status-text">तैयार... कृपया लॉगिन करें।</div>
+      <div id="statusBox" class="status-text">तैयार... कृपया अपनी ईमेल दर्ज करके सत्यापित करें।</div>
     </div>
 
     <!-- Final Center Message -->
@@ -184,18 +219,23 @@
     <script>
     const APP_VERSION = "1.0";
     
-    // सिर्फ और सिर्फ Project 2 की Client ID (सिंगल टेस्टिंग)
-    const CLIENT_ID = "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com";
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";
-    
-    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
+    // सिर्फ 2 प्रोजेक्ट्स: Project 1 और Project 2
+    const CLIENT_IDS = [
+      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1[span_0](start_span)[span_0](end_span)
+      "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com"    // Project 2
+    ];
 
-    let tokenClient;
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";[span_1](start_span)[span_1](end_span)
+    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";[span_2](start_span)[span_2](end_span)
+
+    let tokenClient = null;
     let accessToken = null;
-    let userEmail = "";
+    let verifiedEmail = "";
+    let assignedProjectIndex = 0;
     let adsWatched = 0;
     const requiredAds = 5;
     let isCoolingDown = false;
+    let pollingTimer = null;
 
     function addLog(msg) {
       const box = document.getElementById("statusBox");
@@ -234,76 +274,144 @@
 
     window.onload = function() {
       setupDatePicker();
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
-        callback: (tokenResponse) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            accessToken = tokenResponse.access_token;
-            fetchEmail();
-          } else if (tokenResponse && tokenResponse.error) {
-            addLog("❌ टोकन एरर: " + tokenResponse.error);
-          }
-        },
-        error_callback: (err) => {
-          addLog("❌ OAuth एरर: " + (err.message || JSON.stringify(err)));
-        }
-      });
+      // अगर पहले से ईमेल फोन में सेव है तो ऑटो-वेरीफाई करें
+      const savedEmail = localStorage.getItem("fitstep_saved_email");
+      if (savedEmail) {
+        document.getElementById("emailInput").value = savedEmail;
+        checkWhitelistStatus(savedEmail, false);
+      }
     };
 
-    function login() {
-      addLog("Google लॉगिन खोला जा रहा है (Project 2)...");
-      tokenClient.requestAccessToken({ prompt: "select_account" });
+    function handleVerifyClick() {
+      const emailField = document.getElementById("emailInput");
+      const email = emailField.value.toLowerCase().replace(/\s+/g, "").trim();
+      if (!email || !email.includes("@")) {
+        alert("कृपया सही Gmail ID दर्ज करें!");
+        return;
+      }
+      localStorage.setItem("fitstep_saved_email", email);
+      checkWhitelistStatus(email, true);
     }
 
-    function logout() {
-      accessToken = null;
-      userEmail = "";
-      adsWatched = 0;
-      isCoolingDown = false;
-      document.getElementById("loginSection").style.display = "block";
-      document.getElementById("appSection").style.display = "none";
-      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा लॉगिन करें।";
+    function refreshStatusManually() {
+      const email = verifiedEmail || document.getElementById("emailInput").value.toLowerCase().replace(/\s+/g, "").trim();
+      if (email) {
+        addLog("स्थिति जाँची जा रही है...");
+        checkWhitelistStatus(email, false);
+      }
     }
 
-    function fetchEmail() {
-      addLog("यूज़र प्रोफाइल लोड हो रही है...");
-      fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-        headers: { Authorization: "Bearer " + accessToken }
-      })
-      .then(r => r.json())
-      .then(info => {
-        userEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
-        document.getElementById("userEmailText").innerText = userEmail;
-        document.getElementById("loginSection").style.display = "none";
-        document.getElementById("appSection").style.display = "block";
-        addLog("अकाउंट: <b>" + userEmail + "</b>");
-        verifyWhitelist(userEmail);
-      })
-      .catch(e => addLog("प्रोफाइल लोड त्रुटि: " + e.message));
-    }
+    function checkWhitelistStatus(email, showInitialLog) {
+      if (showInitialLog) {
+        addLog("सर्वर पर अनुमति जाँची जा रही है...");
+      }
 
-    function verifyWhitelist(email) {
-      addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
-      const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
+      const callbackName = "jsonp_check_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
         if (script.parentNode) script.parentNode.removeChild(script);
 
         if (data.allowed) {
-          addLog("✅ अनुमति स्वीकृत (Approved): आप सिंक कर सकते हैं।");
-          document.getElementById("adBtn").disabled = false;
-        } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
-          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
+          if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+          }
+
+          verifiedEmail = email;
+          assignedProjectIndex = Number(data.projectIndex || 0);
+          addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
+          
+          // ईमेल सेक्शन छुपाएँ और Google Login अनलॉक करें
+          document.getElementById("verifySection").style.display = "none";
+          document.getElementById("loginSection").style.display = "block";
+
+          // तय Client ID से OAuth तैयार करें
+          initOAuthClient(assignedProjectIndex);
+
+        } else if (data.status === "PENDING") {
+          addLog("⏳ आपकी अनुमति लंबित (Pending) है। एडमिन की मंज़ूरी का इंतज़ार करें...");
+          document.getElementById("pendingArea").style.display = "block";
+
+          // हर 10 सेकंड में ऑटोमैटिक रिफ्रेश
+          if (!pollingTimer) {
+            pollingTimer = setInterval(() => {
+              checkWhitelistStatus(email, false);
+            }, 10000);
+          }
         } else {
-          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
+          addLog("⛔ अनुमति अस्वीकृत या खाता ब्लॉक है।");
         }
       };
 
       const script = document.createElement("script");
       script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&callback=" + callbackName;
       document.body.appendChild(script);
+    }
+
+    function initOAuthClient(projectIndex) {
+      const clientId = CLIENT_IDS[projectIndex] || CLIENT_IDS[0];
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            accessToken = tokenResponse.access_token;
+            fetchEmailAndVerify();
+          } else if (tokenResponse && tokenResponse.error) {
+            addLog("❌ लॉगिन विफलता: " + tokenResponse.error);
+          }
+        }
+      });
+    }
+
+    function login() {
+      addLog("Google लॉगिन खोला जा रहा है...");
+      if (tokenClient) {
+        // login_hint से वही ईमेल ऑटो-सिलेक्ट होगी
+        tokenClient.requestAccessToken({ prompt: "select_account", hint: verifiedEmail });
+      } else {
+        addLog("⏳ सेवाएँ तैयार हो रही हैं, 2 सेकंड बाद प्रयास करें...");
+      }
+    }
+
+    function fetchEmailAndVerify() {
+      addLog("Google प्रोफाइल लोड हो रही है...");
+      fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: "Bearer " + accessToken }
+      })
+      .then(r => r.json())
+      .then(info => {
+        const loggedEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
+        // अगर ईमेल वही नहीं है जो सत्यापित की गई थी
+        if (loggedEmail !== verifiedEmail) {
+          alert("गड़बड़ी: आपने सत्यापित की गई ईमेल (" + verifiedEmail + ") से लॉगिन नहीं किया!\nलॉगिन रद्द किया जा रहा है।");
+          logout();
+          return;
+        }
+
+        document.getElementById("userEmailText").innerText = loggedEmail;
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("appSection").style.display = "block";
+        document.getElementById("adBtn").disabled = false;
+        addLog("अकाउंट सफलतापूर्वक कनेक्ट हुआ: <b>" + loggedEmail + "</b>");
+      })
+      .catch(e => addLog("प्रोफाइल लोड त्रुटि: " + e.message));
+    }
+
+    function logout() {
+      accessToken = null;
+      verifiedEmail = "";
+      adsWatched = 0;
+      isCoolingDown = false;
+      if (pollingTimer) {
+        clearInterval(pollingTimer);
+        pollingTimer = null;
+      }
+      document.getElementById("loginSection").style.display = "none";
+      document.getElementById("appSection").style.display = "none";
+      document.getElementById("verifySection").style.display = "block";
+      document.getElementById("pendingArea").style.display = "none";
+      document.getElementById("statusBox").innerHTML = "लॉगआउट हो गया। कृपया दोबारा सत्यापित करें।";
     }
 
     function checkServerBackdateEligibility(email) {
@@ -528,11 +636,11 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const isToday = (dateInput === todayStr);
 
-      const isAdmin = (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+      const isAdmin = (verifiedEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
       if (!isToday && !isAdmin) {
         addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
-        const lastBackdateMs = await checkServerBackdateEligibility(userEmail);
+        const lastBackdateMs = await checkServerBackdateEligibility(verifiedEmail);
         const nowMs = Date.now();
 
         if (lastBackdateMs > 0) {
@@ -709,7 +817,7 @@
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
 
         if (!isToday && !isAdmin) {
-          recordServerBackdate(userEmail);
+          recordServerBackdate(verifiedEmail);
         }
 
         setTimeout(() => {
@@ -757,7 +865,7 @@
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userEmail, steps: steps, status: "SUCCESS" })
+        body: JSON.stringify({ email: verifiedEmail, steps: steps, status: "SUCCESS" })
       });
     }
   </script>
