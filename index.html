@@ -186,32 +186,33 @@
     
     // सभी 10 Google Cloud प्रोजेक्ट्स की Client IDs
     const CLIENT_IDS = [
-      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1[span_0](start_span)[span_0](end_span)
+      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1[span_2](start_span)[span_2](end_span)
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com",   // Project 2
       "990823229249-o06umprs5eomesh2iksotnf45t7394dd.apps.googleusercontent.com",  // Project 3
       "895492609983-imnvm5vug7pgecvvectbgg56pp7nj78e.apps.googleusercontent.com",  // Project 4
       "601661509621-0se2c41tb4rkqg8crlq25rpdj52bmn2.apps.googleusercontent.com",  // Project 5
       "483535479488-rppedqajjleadje2190k45vt8jgf09s0b.apps.googleusercontent.com",  // Project 6
       "160429550495-0qqvekeeqfe4ouehq7ffnph0dhm27toh.apps.googleusercontent.com",  // Project 7
-      "280068312235-4ne1ca87r22tm1lumo0k007d4uop6vvm.apps.googleusercontent.com",  // Project 8[span_1](start_span)[span_1](end_span)
-      "95428386979-p7filbh6ts4dins8gbi6202lkt7s90gg.apps.googleusercontent.com",   // Project 9[span_2](start_span)[span_2](end_span)
+      "280068312235-4ne1ca87r22tm1lumo0k007d4uop6vvm.apps.googleusercontent.com",  // Project 8
+      "95428386979-p7filbh6ts4dins8gbi6202lkt7s90gg.apps.googleusercontent.com",   // Project 9
       "414302529196-5d4117p3l1agea2jrs3u47vrc6j06pi7.apps.googleusercontent.com"   // Project 10[span_3](start_span)[span_3](end_span)
     ];
 
-    function getActiveClientId() {
-      const savedIndex = localStorage.getItem("fitstep_project_index");
-      if (savedIndex !== null && !isNaN(savedIndex) && CLIENT_IDS[Number(savedIndex)]) {
-        return CLIENT_IDS[Number(savedIndex)];
+    // नए यूज़र को 0 से 9 के बीच तुरंत बराबर बाँटने और पुराने को याद रखने का लॉजिक
+    function getAssignedClientId() {
+      let savedIndex = localStorage.getItem("fitstep_project_index");
+      if (savedIndex === null || isNaN(savedIndex) || !CLIENT_IDS[Number(savedIndex)]) {
+        // नया यूज़र: 0 से 9 में से किसी भी प्रोजेक्ट में रैंडमली जाएगा (सभी प्रोजेक्ट्स एक्टिव रहेंगे)
+        savedIndex = Math.floor(Math.random() * CLIENT_IDS.length);
+        localStorage.setItem("fitstep_project_index", savedIndex);
       }
-      return CLIENT_IDS[0];
+      return CLIENT_IDS[Number(savedIndex)];
     }
 
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";[span_4](start_span)[span_4](end_span)
-    
-    // केवल Sunil Sehrawat ही एडमिन (असीमित एक्सेस)
     const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";[span_5](start_span)[span_5](end_span)
 
-    let tokenClient;
+    let tokenClient = null;
     let accessToken = null;
     let userEmail = "";
     let adsWatched = 0;
@@ -253,29 +254,39 @@
       dateInput.min = formatDate(past30Days);
     }
 
-    function initOAuthClient() {
-      const activeClientId = getActiveClientId();
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: activeClientId,
-        scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
-        callback: (tokenResponse) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            accessToken = tokenResponse.access_token;
-            fetchEmail();
+    function initTokenClientSafe() {
+      if (window.google && google.accounts && google.accounts.oauth2) {
+        const targetClientId = getAssignedClientId();
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: targetClientId,
+          scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              accessToken = tokenResponse.access_token;
+              fetchEmail();
+            } else if (tokenResponse && tokenResponse.error) {
+              addLog("❌ लॉगिन एरर: " + tokenResponse.error);
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     window.onload = function() {
       setupDatePicker();
-      initOAuthClient();
+      initTokenClientSafe();
     };
 
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
-      initOAuthClient();
-      tokenClient.requestAccessToken({ prompt: "select_account" });
+      if (!tokenClient) {
+        initTokenClientSafe();
+      }
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: "select_account" });
+      } else {
+        addLog("⏳ Google सेवाएँ लोड हो रही हैं, कृपया 2 सेकंड में दोबारा दबाएँ...");
+      }
     }
 
     function logout() {
@@ -307,12 +318,13 @@
 
     function verifyWhitelist(email) {
       addLog("एडमिन अनुमति (Whitelist) जाँची जा रही है...");
+      const currentIdx = localStorage.getItem("fitstep_project_index") || "0";
       const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
         if (script.parentNode) script.parentNode.removeChild(script);
 
-        // सर्वर से असाइन हुआ Project Index हमेशा के लिए स्थानीय रूप से लॉक करें
+        // शीट में जो प्रोजेक्ट तय है, वही यूज़र के फ़ोन पर परमानेंट सेव रहेगा
         if (data.projectIndex !== undefined && data.projectIndex !== null) {
           localStorage.setItem("fitstep_project_index", data.projectIndex);
         }
@@ -329,7 +341,7 @@
       };
 
       const script = document.createElement("script");
-      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&callback=" + callbackName;
+      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&project_index=" + currentIdx + "&callback=" + callbackName;
       document.body.appendChild(script);
     }
 
