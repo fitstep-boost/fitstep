@@ -466,6 +466,7 @@
       return null;
     }
 
+    // 100% सटीक मिनट-लॉकिंग: 0 steps या activity segment को पकड़ना
     async function checkDailyStepsAndOccupiedMinutes(startMillis, endMillis) {
       let totalDaySteps = 0;
       const occupiedMinutes = new Set();
@@ -474,7 +475,10 @@
           method: "POST",
           headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
           body: JSON.stringify({
-            aggregateBy: [{ dataTypeName: "com.google.step_count.delta" }],
+            aggregateBy: [
+              { dataTypeName: "com.google.step_count.delta" },
+              { dataTypeName: "com.google.activity.segment" }
+            ],
             bucketByTime: { durationMillis: 60000 },
             startTimeMillis: startMillis,
             endTimeMillis: endMillis
@@ -484,13 +488,21 @@
         if (data && data.bucket) {
           for (let b of data.bucket) {
             let bucketStartMin = Math.floor(parseInt(b.startTimeMillis) / 60000);
-            if (b.dataset && b.dataset[0] && b.dataset[0].point && b.dataset[0].point.length > 0) {
-              occupiedMinutes.add(bucketStartMin);
-              for (let pt of b.dataset[0].point) {
-                if (pt.value && pt.value[0] && pt.value[0].intVal) {
-                  totalDaySteps += pt.value[0].intVal;
+            let hasAnyPoint = false;
+            if (b.dataset) {
+              for (let ds of b.dataset) {
+                if (ds.point && ds.point.length > 0) {
+                  hasAnyPoint = true;
+                  for (let pt of ds.point) {
+                    if (pt.value && pt.value[0] && pt.value[0].intVal) {
+                      totalDaySteps += pt.value[0].intVal;
+                    }
+                  }
                 }
               }
+            }
+            if (hasAnyPoint) {
+              occupiedMinutes.add(bucketStartMin);
             }
           }
         }
@@ -513,6 +525,7 @@
 
       const isAdmin = (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
+      // सर्वर आधारित 24-घंटे बैक-डेट सीमा जाँच
       if (!isToday && !isAdmin) {
         addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
         const lastBackdateMs = await checkServerBackdateEligibility(userEmail);
@@ -558,6 +571,7 @@
 
       addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
 
+      // बैक-डेट में ठीक सुबह 10:00:00 AM से पीछे का समय
       let endCursorTime;
       if (isToday) {
         let now = Date.now();
@@ -582,6 +596,7 @@
       while (stepsRemaining > 0 && currentTimeCursor > dayStart) {
         let currentMinuteIndex = Math.floor(currentTimeCursor / 60000);
 
+        // जिस मिनट में कोई भी रिकॉर्ड (0 steps भी) है, केवल उस एक मिनट को छोड़ें
         if (occupiedMinutes.has(currentMinuteIndex)) {
           currentTimeCursor -= (60 * 1000);
           continue;
