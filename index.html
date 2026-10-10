@@ -174,7 +174,7 @@
         </div>
       </div>
 
-      <!-- Google Login सेक्शन (स्वीकृत होने पर ही खुलेगा) -->
+      <!-- Google Login सेक्शन -->
       <div id="loginSection" style="display: none;">
         <button id="loginBtn" class="btn btn-login" onclick="login()">Google Fit से लॉगिन करें</button>
       </div>
@@ -219,7 +219,7 @@
     <script>
     const APP_VERSION = "1.0";
     
-    // सिर्फ 2 प्रोजेक्ट्स: Project 1 और Project 2
+    // प्रोजेक्ट 1 और प्रोजेक्ट 2
     const CLIENT_IDS = [
       "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1[span_0](start_span)[span_0](end_span)
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com"    // Project 2
@@ -274,7 +274,6 @@
 
     window.onload = function() {
       setupDatePicker();
-      // अगर पहले से ईमेल फोन में सेव है तो ऑटो-वेरीफाई करें
       const savedEmail = localStorage.getItem("fitstep_saved_email");
       if (savedEmail) {
         document.getElementById("emailInput").value = savedEmail;
@@ -321,22 +320,19 @@
           assignedProjectIndex = Number(data.projectIndex || 0);
           addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
           
-          // ईमेल सेक्शन छुपाएँ और Google Login अनलॉक करें
           document.getElementById("verifySection").style.display = "none";
           document.getElementById("loginSection").style.display = "block";
 
-          // तय Client ID से OAuth तैयार करें
           initOAuthClient(assignedProjectIndex);
 
         } else if (data.status === "PENDING") {
           addLog("⏳ आपकी अनुमति लंबित (Pending) है। एडमिन की मंज़ूरी का इंतज़ार करें...");
           document.getElementById("pendingArea").style.display = "block";
 
-          // हर 10 सेकंड में ऑटोमैटिक रिफ्रेश
           if (!pollingTimer) {
             pollingTimer = setInterval(() => {
               checkWhitelistStatus(email, false);
-            }, 10000);
+            }, 8000);
           }
         } else {
           addLog("⛔ अनुमति अस्वीकृत या खाता ब्लॉक है।");
@@ -344,7 +340,8 @@
       };
 
       const script = document.createElement("script");
-      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&callback=" + callbackName;
+      // &_t= Date.now() कैशिंग को पूरी तरह रोकता है
+      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&_t=" + Date.now() + "&callback=" + callbackName;
       document.body.appendChild(script);
     }
 
@@ -367,7 +364,6 @@
     function login() {
       addLog("Google लॉगिन खोला जा रहा है...");
       if (tokenClient) {
-        // login_hint से वही ईमेल ऑटो-सिलेक्ट होगी
         tokenClient.requestAccessToken({ prompt: "select_account", hint: verifiedEmail });
       } else {
         addLog("⏳ सेवाएँ तैयार हो रही हैं, 2 सेकंड बाद प्रयास करें...");
@@ -382,7 +378,6 @@
       .then(r => r.json())
       .then(info => {
         const loggedEmail = info.email.toLowerCase().replace(/\s+/g, "").trim();
-        // अगर ईमेल वही नहीं है जो सत्यापित की गई थी
         if (loggedEmail !== verifiedEmail) {
           alert("गड़बड़ी: आपने सत्यापित की गई ईमेल (" + verifiedEmail + ") से लॉगिन नहीं किया!\nलॉगिन रद्द किया जा रहा है।");
           logout();
