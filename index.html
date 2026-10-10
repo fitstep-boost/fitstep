@@ -219,7 +219,7 @@
     <script>
     const APP_VERSION = "1.0";
     
-    // प्रोजेक्ट 1 और प्रोजेक्ट 2
+    // प्रोजेक्ट 1 और प्रोजेक्ट 2 की Client IDs
     const CLIENT_IDS = [
       "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com"    // Project 2
@@ -300,7 +300,6 @@
       }
     }
 
-    // बिल्कुल बेस फ़ाइल जैसा ओरिजिनल verifyWhitelist फ़ंक्शन
     function checkWhitelistStatus(email, showInitialLog) {
       if (showInitialLog) {
         addLog("सर्वर पर अनुमति जाँची जा रही है...");
@@ -319,18 +318,22 @@
 
           verifiedEmail = email;
           assignedProjectIndex = Number(data.projectIndex || 0);
-          addLog("✅ अनुमति स्वीकृत (Approved): Project " + (assignedProjectIndex + 1) + " आवंटित।");
+          addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
           
           document.getElementById("verifySection").style.display = "none";
           document.getElementById("loginSection").style.display = "block";
 
           initOAuthClient(assignedProjectIndex);
 
-        } else if (data.status === "OUTDATED_VERSION") {
-          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
-          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
+        } else if (data.status === "BLOCKED") {
+          if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+          }
+          addLog("⛔ <b>खाता ब्लॉक है:</b> इस खाते को सिंक करने की अनुमति नहीं है।");
+          document.getElementById("pendingArea").style.display = "none";
         } else {
-          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
+          addLog("⏳ आपकी अनुमति लंबित (Pending) है। एडमिन की मंज़ूरी का इंतज़ार करें...");
           document.getElementById("pendingArea").style.display = "block";
 
           if (!pollingTimer) {
