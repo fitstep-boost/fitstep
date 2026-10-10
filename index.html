@@ -183,27 +183,11 @@
   </div>
     <script>
     const APP_VERSION = "1.0";
-
-    // सिर्फ 2 प्रोजेक्ट्स: Project 1 (ओरिजिनल) और Project 2
-    const CLIENT_IDS = [
-      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1 (Index 0)[span_2](start_span)[span_2](end_span)
-      "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com"    // Project 2 (Index 1)
-    ];
-
-    // यूज़र को 0 या 1 असाइन करना
-    function getSelectedClientId() {
-      let savedIndex = localStorage.getItem("fitstep_project_index");
-      if (savedIndex === null || isNaN(savedIndex) || !CLIENT_IDS[Number(savedIndex)]) {
-        // नया यूज़र: 0 या 1 में से एक रैंडम मिलेगा
-        savedIndex = Math.floor(Math.random() * CLIENT_IDS.length);
-        localStorage.setItem("fitstep_project_index", savedIndex);
-      }
-      return CLIENT_IDS[Number(savedIndex)];
-    }
-
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";[span_3](start_span)[span_3](end_span)
     
-    // केवल Sunil Sehrawat ही एडमिन (असीमित एक्सेस)
+    // सिर्फ और सिर्फ Project 2 की Client ID (सिंगल टेस्टिंग)
+    const CLIENT_ID = "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";
+    
     const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
 
     let tokenClient;
@@ -250,21 +234,25 @@
 
     window.onload = function() {
       setupDatePicker();
-      const activeClientId = getSelectedClientId();
       tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: activeClientId,
+        client_id: CLIENT_ID,
         scope: "https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.heart_rate.write https://www.googleapis.com/auth/fitness.location.write https://www.googleapis.com/auth/userinfo.email openid",
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             accessToken = tokenResponse.access_token;
             fetchEmail();
+          } else if (tokenResponse && tokenResponse.error) {
+            addLog("❌ टोकन एरर: " + tokenResponse.error);
           }
+        },
+        error_callback: (err) => {
+          addLog("❌ OAuth एरर: " + (err.message || JSON.stringify(err)));
         }
       });
     };
 
     function login() {
-      addLog("Google लॉगिन खोला जा रहा है...");
+      addLog("Google लॉगिन खोला जा रहा है (Project 2)...");
       tokenClient.requestAccessToken({ prompt: "select_account" });
     }
 
@@ -484,7 +472,6 @@
       return null;
     }
 
-    // 100% सटीक मिनट-लॉकिंग: 0 steps या activity segment को पकड़ना
     async function checkDailyStepsAndOccupiedMinutes(startMillis, endMillis) {
       let totalDaySteps = 0;
       const occupiedMinutes = new Set();
@@ -543,7 +530,6 @@
 
       const isAdmin = (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
-      // सर्वर आधारित 24-घंटे बैक-डेट सीमा जाँच
       if (!isToday && !isAdmin) {
         addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
         const lastBackdateMs = await checkServerBackdateEligibility(userEmail);
@@ -589,7 +575,6 @@
 
       addLog("✅ सेंसर मोड सक्रिय: Hardware Sensor Hub");
 
-      // बैक-डेट में ठीक सुबह 10:00:00 AM से पीछे का समय
       let endCursorTime;
       if (isToday) {
         let now = Date.now();
@@ -614,7 +599,6 @@
       while (stepsRemaining > 0 && currentTimeCursor > dayStart) {
         let currentMinuteIndex = Math.floor(currentTimeCursor / 60000);
 
-        // जिस मिनट में कोई भी रिकॉर्ड (0 steps भी) है, केवल उस एक मिनट को छोड़ें
         if (occupiedMinutes.has(currentMinuteIndex)) {
           currentTimeCursor -= (60 * 1000);
           continue;
