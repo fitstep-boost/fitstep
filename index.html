@@ -221,12 +221,12 @@
     
     // प्रोजेक्ट 1 और प्रोजेक्ट 2
     const CLIENT_IDS = [
-      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1[span_0](start_span)[span_0](end_span)
+      "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com"    // Project 2
     ];
 
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";[span_1](start_span)[span_1](end_span)
-    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";[span_2](start_span)[span_2](end_span)
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";
+    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
 
     let tokenClient = null;
     let accessToken = null;
@@ -300,12 +300,13 @@
       }
     }
 
+    // बिल्कुल बेस फ़ाइल जैसा ओरिजिनल verifyWhitelist फ़ंक्शन
     function checkWhitelistStatus(email, showInitialLog) {
       if (showInitialLog) {
         addLog("सर्वर पर अनुमति जाँची जा रही है...");
       }
 
-      const callbackName = "jsonp_check_" + Math.round(Math.random() * 100000);
+      const callbackName = "jsonp_cb_" + Math.round(Math.random() * 100000);
       window[callbackName] = function(data) {
         delete window[callbackName];
         if (script.parentNode) script.parentNode.removeChild(script);
@@ -318,15 +319,18 @@
 
           verifiedEmail = email;
           assignedProjectIndex = Number(data.projectIndex || 0);
-          addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
+          addLog("✅ अनुमति स्वीकृत (Approved): Project " + (assignedProjectIndex + 1) + " आवंटित।");
           
           document.getElementById("verifySection").style.display = "none";
           document.getElementById("loginSection").style.display = "block";
 
           initOAuthClient(assignedProjectIndex);
 
-        } else if (data.status === "PENDING") {
-          addLog("⏳ आपकी अनुमति लंबित (Pending) है। एडमिन की मंज़ूरी का इंतज़ार करें...");
+        } else if (data.status === "OUTDATED_VERSION") {
+          addLog("❌ <b>ऐप वर्ज़न पुराना है:</b> नया वर्ज़न उपलब्ध है।");
+          alert("आपका ऐप वर्ज़न पुराना हो चुका है! कृपया एडमिन से नया APK लेकर अपडेट करें।");
+        } else {
+          addLog("⏳ अनुमति लंबित (Pending): एडमिन की मंज़ूरी का इंतज़ार करें।");
           document.getElementById("pendingArea").style.display = "block";
 
           if (!pollingTimer) {
@@ -334,13 +338,10 @@
               checkWhitelistStatus(email, false);
             }, 8000);
           }
-        } else {
-          addLog("⛔ अनुमति अस्वीकृत या खाता ब्लॉक है।");
         }
       };
 
       const script = document.createElement("script");
-      // &_t= Date.now() कैशिंग को पूरी तरह रोकता है
       script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&_t=" + Date.now() + "&callback=" + callbackName;
       document.body.appendChild(script);
     }
