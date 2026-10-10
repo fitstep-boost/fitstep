@@ -181,13 +181,12 @@
       </div>
     </div>
   </div>
-
-  <script>
+    <script>
     const APP_VERSION = "1.0";
     const CLIENT_ID = "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com";
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0af3er7Y8i5yNBBUdKfaos15Z9METmiYl05acKw3cPeUE2j7nHkN02m-dPxXYm_1_/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";
     
-    // एडमिन ईमेल (असीमित बैक-डेट एक्सेस)
+    // केवल Sunil Sehrawat ही एडमिन
     const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
 
     let tokenClient;
@@ -301,6 +300,31 @@
       document.body.appendChild(script);
     }
 
+    function checkServerBackdateEligibility(email) {
+      return new Promise((resolve) => {
+        const callbackName = "jsonp_backdate_" + Math.round(Math.random() * 100000);
+        window[callbackName] = function(data) {
+          delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          resolve(data ? Number(data.lastSyncTime || 0) : 0);
+        };
+        const script = document.createElement("script");
+        script.src = SCRIPT_URL + "?action=check_backdate&email=" + encodeURIComponent(email) + "&callback=" + callbackName;
+        document.body.appendChild(script);
+      });
+    }
+
+    function recordServerBackdate(email) {
+      const callbackName = "jsonp_rec_" + Math.round(Math.random() * 100000);
+      window[callbackName] = function() {
+        delete window[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+      const script = document.createElement("script");
+      script.src = SCRIPT_URL + "?action=record_backdate&email=" + encodeURIComponent(email) + "&callback=" + callbackName;
+      document.body.appendChild(script);
+    }
+
     function playAd() {
       if (isCoolingDown || adsWatched >= requiredAds) return;
       document.getElementById("adBtn").disabled = true;
@@ -386,7 +410,7 @@
         remaining--;
       }, 1000);
     }
-        function showFinalCompletionScreen() {
+          function showFinalCompletionScreen() {
       document.getElementById("activeContent").style.display = "none";
       document.getElementById("completionMessageCard").style.display = "block";
     }
@@ -442,7 +466,6 @@
       return null;
     }
 
-    // सख्त फ़िल्टर: किसी भी तरह का रिकॉर्ड (0 steps भी) होने पर उस मिनट को लॉक करना
     async function checkDailyStepsAndOccupiedMinutes(startMillis, endMillis) {
       let totalDaySteps = 0;
       const occupiedMinutes = new Set();
@@ -488,20 +511,19 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const isToday = (dateInput === todayStr);
 
-      // --- 24-घंटे बैक-डेट सीमा जाँच (Sunil Sehrawat56@gmail.com बाइपास) ---
       const isAdmin = (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
       if (!isToday && !isAdmin) {
-        const lastBackdateKey = "fitstep_last_backdate_" + userEmail;
-        const lastBackdateTime = localStorage.getItem(lastBackdateKey);
+        addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
+        const lastBackdateMs = await checkServerBackdateEligibility(userEmail);
         const nowMs = Date.now();
 
-        if (lastBackdateTime) {
-          const diffHours = (nowMs - parseInt(lastBackdateTime)) / (1000 * 60 * 60);
+        if (lastBackdateMs > 0) {
+          const diffHours = (nowMs - lastBackdateMs) / (1000 * 60 * 60);
           if (diffHours < 24) {
             const waitHours = Math.ceil(24 - diffHours);
-            addLog(`⛔ <b>सीमा लागू:</b> आप आज पहले ही एक पिछली तारीख में स्टेप अपडेट कर चुके हैं।`);
-            alert(`आप आज पहले ही किसी पिछली तारीख में स्टेप्स अपडेट कर चुके हैं!\n24 घंटे में केवल 1 बैक-डेट एंट्री की अनुमति है।\nकृपया ${waitHours} घंटे बाद प्रयास करें या आज की तारीख सिंक करें।`);
+            addLog(`⛔ <b>सर्वर रोक:</b> आप आज पहले ही किसी पिछली तारीख में स्टेप अपडेट कर चुके हैं।`);
+            alert(`सर्वर रिकॉर्ड के अनुसार आप आज पहले ही किसी पिछली तारीख में स्टेप्स अपडेट कर चुके हैं!\n24 घंटे में केवल 1 बैक-डेट एंट्री की अनुमति है।\nकृपया ${waitHours} घंटे बाद प्रयास करें या आज की तारीख सिंक करें।`);
             syncBtn.disabled = false;
             return;
           }
@@ -670,7 +692,7 @@
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
 
         if (!isToday && !isAdmin) {
-          localStorage.setItem("fitstep_last_backdate_" + userEmail, Date.now().toString());
+          recordServerBackdate(userEmail);
         }
 
         setTimeout(() => {
