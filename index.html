@@ -219,7 +219,7 @@
     <script>
     const APP_VERSION = "1.0";
     
-    // पूरे 10 Google Cloud प्रोजेक्ट्स की Client IDs (Index 0 से Index 9)
+    // पूरे 10 Google Cloud प्रोजेक्ट्स की Client IDs
     const CLIENT_IDS = [
       "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1 (Index 0)
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com",   // Project 2 (Index 1)
@@ -234,12 +234,12 @@
     ];
 
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydwLePvwnQzl_BHpnWo2xeGYLkqS4VENaWqJV9VouEMj5ntIj8m4eRnCJy3SgeGWeX9Q/exec";
-    const ADMIN_EMAIL = "sunilsehrawat56@gmail.com";
 
     let tokenClient = null;
     let accessToken = null;
     let verifiedEmail = "";
     let assignedProjectIndex = 0;
+    let isAdminUser = false; // सर्वर से सुरक्षित आने वाला फ्लैग (कोई ईमेल हार्डकोड नहीं)
     let adsWatched = 0;
     const requiredAds = 5;
     let isCoolingDown = false;
@@ -308,7 +308,6 @@
       }
     }
 
-    // बिल्कुल बेस फाइल का ओरिजिनल jsonp_cb_ फंक्शन
     function checkWhitelistStatus(email, showInitialLog) {
       if (showInitialLog) {
         addLog("सर्वर पर अनुमति जाँची जा रही है...");
@@ -327,6 +326,8 @@
 
           verifiedEmail = email;
           assignedProjectIndex = Number(data.projectIndex || 0);
+          isAdminUser = Boolean(data.isAdmin); // सर्वर से एडमिन का स्टेटस डिटेक्ट हुआ
+          
           addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
           
           document.getElementById("verifySection").style.display = "none";
@@ -409,6 +410,7 @@
     function logout() {
       accessToken = null;
       verifiedEmail = "";
+      isAdminUser = false;
       adsWatched = 0;
       isCoolingDown = false;
       if (pollingTimer) {
@@ -644,9 +646,8 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const isToday = (dateInput === todayStr);
 
-      const isAdmin = (verifiedEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
-
-      if (!isToday && !isAdmin) {
+      // केवल सर्वर से आए फ्लैग पर निर्भर
+      if (!isToday && !isAdminUser) {
         addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
         const lastBackdateMs = await checkServerBackdateEligibility(verifiedEmail);
         const nowMs = Date.now();
@@ -824,7 +825,7 @@
         addLog("📍 <b>" + totalKm + " km</b> वॉक दूरी दर्ज हुई।");
         createSession(overallStartTimeMillis, overallEndTimeMillis, targetTotalSteps, walkTitle);
 
-        if (!isToday && !isAdmin) {
+        if (!isToday && !isAdminUser) {
           recordServerBackdate(verifiedEmail);
         }
 
