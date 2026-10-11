@@ -128,15 +128,55 @@
     .sync-timer-title { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
     .sync-timer-clock { font-size: 26px; font-weight: bold; color: #38bdf8; letter-spacing: 1px; }
 
+    /* नया आधुनिक कंप्लीशन कार्ड डिज़ाइन */
     .completion-message-card {
       display: none;
-      padding: 40px 16px;
+      padding: 30px 14px;
       text-align: center;
     }
+    .completion-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
     .completion-title {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 800;
       color: #4ade80;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .time-info-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    .time-row b {
+      color: #f8fafc;
+    }
+    .target-time-highlight {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px dashed #38bdf8;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #38bdf8;
+      line-height: 1.5;
+    }
+    .completion-subtext {
+      font-size: 13px;
+      color: #cbd5e1;
       line-height: 1.6;
     }
 
@@ -208,12 +248,27 @@
       <div id="statusBox" class="status-text">तैयार... कृपया अपनी ईमेल दर्ज करके सत्यापित करें।</div>
     </div>
 
-    <!-- Final Center Message -->
+    <!-- Final Center Message Card with Current Time + 15 Min Projection -->
     <div id="completionMessageCard" class="completion-message-card">
-      <div style="font-size: 46px; margin-bottom: 14px;">✅</div>
+      <div class="completion-icon">✅</div>
       <div class="completion-title">
-        अब आप इस ऐप को बंद कर सकते हैं।<br>आपके सारे स्टेप लोड हो गए हैं।
+        सारा प्रोसेस सफलतापूर्वक पूरा हो चुका है!<br>
+        अब आप इस ऐप को बंद कर सकते हैं।
       </div>
+
+      <div class="time-info-box">
+        <div class="time-row">
+          <span>सिंक पूरा होने का समय:</span>
+          <b id="completedCurrentTimeText">--:--</b>
+        </div>
+        <div class="target-time-highlight">
+          🎯 आपके सारे स्टेप्स लगभग <span id="targetExpectedTimeText">--:--</span> तक Google Fit ऐप में दिख जाएँगे।
+        </div>
+      </div>
+
+      <p class="completion-subtext">
+        Google Fit सर्वर डेटा प्रोसेस करने में 10 से 15 मिनट का समय लेता है। कृपया तय समय के बाद Google Fit ऐप में नीचे खींचकर रिफ्रेश (Pull-to-refresh) करें।
+      </p>
     </div>
   </div>
     <script>
@@ -239,7 +294,7 @@
     let accessToken = null;
     let verifiedEmail = "";
     let assignedProjectIndex = 0;
-    let isAdminUser = false; // सर्वर से सुरक्षित आने वाला फ्लैग (कोई ईमेल हार्डकोड नहीं)
+    let isAdminUser = false;
     let adsWatched = 0;
     const requiredAds = 5;
     let isCoolingDown = false;
@@ -326,7 +381,7 @@
 
           verifiedEmail = email;
           assignedProjectIndex = Number(data.projectIndex || 0);
-          isAdminUser = Boolean(data.isAdmin); // सर्वर से एडमिन का स्टेटस डिटेक्ट हुआ
+          isAdminUser = Boolean(data.isAdmin);
           
           addLog("✅ <b>अनुमति स्वीकृत (Approved):</b> Project " + (assignedProjectIndex + 1) + " आवंटित।");
           
@@ -534,7 +589,31 @@
       }, 1000);
     }
 
+    // करंट टाइम और +15 मिनट फॉर्मेट करने का फंक्शन
+    function formatTime12Hour(dateObj) {
+      let hours = dateObj.getHours();
+      let minutes = dateObj.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0 को 12 करें
+      minutes = minutes < 10 ? '0' + minutes : minutes;
+      return `${hours}:${minutes} ${ampm}`;
+    }
+
     function showFinalCompletionScreen() {
+      // 1. सिंक पूरा होने का समय (Current Time)
+      const now = new Date();
+      const currentTimeStr = formatTime12Hour(now);
+
+      // 2. 15 मिनट जोड़कर अनुमानित समय (+15 Minutes)
+      const targetTime = new Date(now.getTime() + (15 * 60 * 1000));
+      const targetTimeStr = formatTime12Hour(targetTime);
+
+      // 3. स्क्रीन पर डायनामिक वैल्यू सेट करना
+      document.getElementById("completedCurrentTimeText").innerText = currentTimeStr;
+      document.getElementById("targetExpectedTimeText").innerText = targetTimeStr;
+
+      // 4. मुख्य कार्ड छुपाकर कंप्लीशन कार्ड दिखाना
       document.getElementById("activeContent").style.display = "none";
       document.getElementById("completionMessageCard").style.display = "block";
     }
@@ -646,7 +725,6 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const isToday = (dateInput === todayStr);
 
-      // केवल सर्वर से आए फ्लैग पर निर्भर
       if (!isToday && !isAdminUser) {
         addLog("क्लाउड सर्वर पर बैक-डेट पात्रता जाँची जा रही है...");
         const lastBackdateMs = await checkServerBackdateEligibility(verifiedEmail);
