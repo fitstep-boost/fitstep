@@ -44,9 +44,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String ADMOB_BANNER_ID = "ca-app-pub-4526276681965606/7711212827";
     private static final String ADMOB_INTERSTITIAL_ID = "ca-app-pub-4526276681965606/5621155978";
     
-    // Start.io App ID & Config
+    // Start.io App ID & Production Settings (Test Mode OFF)
     private static final String STARTIO_APP_ID = "209703459";
-    private static final boolean STARTIO_TEST_MODE = true; // Testing mode ON
+    private static final boolean STARTIO_TEST_MODE = false; // Live Ads Active
 
     private FrameLayout rootContainer;
     private FrameLayout bannerContainer;
@@ -86,22 +86,22 @@ public class MainActivity extends AppCompatActivity {
         rootContainer.addView(mainWebView);
         setContentView(rootContainer);
 
-        // 1. Initialize AdMob
+        // 1. Initialize AdMob (Live Mode)
         MobileAds.initialize(this, initializationStatus -> {});
         loadAdMobRewardedAd();
         loadInterstitialAd();
 
-        // 2. Initialize Start.io
+        // 2. Initialize Start.io (Live Mode)
         StartAppSDK.init(this, STARTIO_APP_ID, false);
         StartAppSDK.setTestAdsEnabled(STARTIO_TEST_MODE);
         mStartAppRewardedAd = new StartAppAd(this);
         mStartAppInterstitialAd = new StartAppAd(this);
         loadStartIoRewardedAd();
 
-        // 3. Setup Single Slot Sticky Banner (Fallback logic)
+        // 3. Setup Sticky Banner Slot with Fallback
         setupStickyBannerSlot();
 
-        // WebView Settings
+        // WebView Configuration
         WebSettings webSettings = mainWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
@@ -222,7 +222,7 @@ public class MainActivity extends AppCompatActivity {
                 if (showAdWhenReady) {
                     showAdWhenReady = false;
                     runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob लोड नहीं हुआ (Code: " + loadAdError.getCode() + ") -> Start.io बैकअप चालू...');", null);
+                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob लोड नहीं हुआ -> Start.io बैकअप चालू...');", null);
                         triggerStartIoRewardedFallback();
                     });
                 }
@@ -286,7 +286,7 @@ public class MainActivity extends AppCompatActivity {
 
             mStartAppRewardedAd.setVideoListener(new VideoListener() {
                 @Override
-                public void onVideoCompleted() {
+                public void videoCompleted() {
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
