@@ -284,9 +284,10 @@ public class MainActivity extends AppCompatActivity {
                 mainWebView.evaluateJavascript("javascript:addLog('🔄 Start.io बैकअप ऐड दिखाया जा रहा है...');", null);
             });
 
+            // ✅ फिक्स: videoCompleted की जगह onVideoCompleted
             mStartAppRewardedAd.setVideoListener(new VideoListener() {
                 @Override
-                public void videoCompleted() {
+                public void onVideoCompleted() {
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
