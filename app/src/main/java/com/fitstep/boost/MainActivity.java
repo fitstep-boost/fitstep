@@ -44,9 +44,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String ADMOB_BANNER_ID = "ca-app-pub-4526276681965606/7711212827";
     private static final String ADMOB_INTERSTITIAL_ID = "ca-app-pub-4526276681965606/5621155978";
     
-    // Start.io App ID & Production Settings (Test Mode OFF)
+    // Start.io App ID & Production Settings
     private static final String STARTIO_APP_ID = "209703459";
-    private static final boolean STARTIO_TEST_MODE = false; // Live Ads Active
+    private static final boolean STARTIO_TEST_MODE = false;
 
     private FrameLayout rootContainer;
     private FrameLayout bannerContainer;
@@ -86,12 +86,12 @@ public class MainActivity extends AppCompatActivity {
         rootContainer.addView(mainWebView);
         setContentView(rootContainer);
 
-        // 1. Initialize AdMob (Live Mode)
+        // 1. Initialize AdMob
         MobileAds.initialize(this, initializationStatus -> {});
         loadAdMobRewardedAd();
         loadInterstitialAd();
 
-        // 2. Initialize Start.io (Live Mode)
+        // 2. Initialize Start.io
         StartAppSDK.init(this, STARTIO_APP_ID, false);
         StartAppSDK.setTestAdsEnabled(STARTIO_TEST_MODE);
         mStartAppRewardedAd = new StartAppAd(this);
@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity {
         bannerContainer.addView(startIoBannerView);
     }
 
-    // --- Rewarded Ad Methods ---
+    // --- Rewarded Ad Methods (AdMob Primary) ---
     private void loadAdMobRewardedAd() {
         if (mAdMobRewardedAd != null || isAdMobLoading) return;
         isAdMobLoading = true;
@@ -220,9 +220,9 @@ public class MainActivity extends AppCompatActivity {
                 mAdMobRewardedAd = null;
                 isAdMobLoading = false;
                 if (showAdWhenReady) {
-                    showAdWhenReady = false;
+                    // AdMob नहीं मिला, सीधे Start.io फॉलबैक ट्रिगर करें
                     runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob लोड नहीं हुआ -> Start.io बैकअप चालू...');", null);
+                        mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob उपलब्ध नहीं -> Start.io बैकअप लोड हो रहा है...');", null);
                         triggerStartIoRewardedFallback();
                     });
                 }
@@ -261,68 +261,99 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // --- Start.io Bulletproof Mode ---
     private void loadStartIoRewardedAd() {
         if (isStartIoLoading) return;
         isStartIoLoading = true;
 
-        mStartAppRewardedAd.loadAd(StartAppAd.AdMode.REWARDED_VIDEO, new AdEventListener() {
+        if (mStartAppRewardedAd == null) {
+            mStartAppRewardedAd = new StartAppAd(this);
+        }
+
+        // AUTOMATIC मोड 100% इन्वेंट्री देता है (No-Fill शून्य हो जाता है)
+        mStartAppRewardedAd.loadAd(StartAppAd.AdMode.AUTOMATIC, new AdEventListener() {
             @Override
             public void onReceiveAd(Ad ad) {
                 isStartIoLoading = false;
+                if (showAdWhenReady) {
+                    showAdWhenReady = false;
+                    runOnUiThread(() -> showStartIoAdNow());
+                }
             }
 
             @Override
             public void onFailedToReceiveAd(Ad ad) {
                 isStartIoLoading = false;
+                if (showAdWhenReady) {
+                    showAdWhenReady = false;
+                    runOnUiThread(() -> {
+                        mainWebView.evaluateJavascript("javascript:addLog('❌ नेटवर्क पर ऐड तैयार नहीं हो सका, 3 सेकंड बाद पुनः दबाएँ।');", null);
+                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                    });
+                }
             }
         });
     }
 
     private void triggerStartIoRewardedFallback() {
         if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
+            showStartIoAdNow();
+        } else {
+            // अगर तैयार नहीं है, तो यूजर को भगाने के बजाय लोड करके स्क्रीन पर पॉप-अप करें
+            showAdWhenReady = true;
             runOnUiThread(() -> {
-                mainWebView.evaluateJavascript("javascript:addLog('🔄 Start.io बैकअप ऐड दिखाया जा रहा है...');", null);
+                mainWebView.evaluateJavascript("javascript:addLog('⏳ Start.io बैकअप ऐड लोड हो रहा है, कृपया 2-3 सेकंड रुकें...');", null);
             });
+            loadStartIoRewardedAd();
+        }
+    }
 
-            // ✅ फिक्स: videoCompleted की जगह onVideoCompleted
-            mStartAppRewardedAd.setVideoListener(new VideoListener() {
-                @Override
-                public void onVideoCompleted() {
+    private void showStartIoAdNow() {
+        runOnUiThread(() -> {
+            mainWebView.evaluateJavascript("javascript:addLog('🔄 Start.io बैकअप ऐड दिखाया जा रहा है...');", null);
+        });
+
+        // 1. वीडियो लिसनर (अगर वीडियो चला)
+        mStartAppRewardedAd.setVideoListener(new VideoListener() {
+            @Override
+            public void onVideoCompleted() {
+                runOnUiThread(() -> {
+                    mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
+                });
+            }
+        });
+
+        // 2. डिस्प्ले लिसनर (अगर फुल-स्क्रीन ग्राफिक ऐड चला)
+        mStartAppRewardedAd.showAd(new AdDisplayListener() {
+            private boolean isRewardCredited = false;
+
+            @Override
+            public void adHidden(Ad ad) {
+                // जब यूजर ऐड बंद (Cross) करे, तभी रिवॉर्ड मिले
+                if (!isRewardCredited) {
+                    isRewardCredited = true;
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:window.adRewardCompleted();", null);
                     });
                 }
-            });
+                loadStartIoRewardedAd();
+            }
 
-            mStartAppRewardedAd.showAd(new AdDisplayListener() {
-                @Override
-                public void adHidden(Ad ad) {
-                    loadStartIoRewardedAd();
-                }
+            @Override
+            public void adDisplayed(Ad ad) {}
 
-                @Override
-                public void adDisplayed(Ad ad) {}
+            @Override
+            public void adClicked(Ad ad) {}
 
-                @Override
-                public void adClicked(Ad ad) {}
-
-                @Override
-                public void adNotDisplayed(Ad ad) {
-                    loadStartIoRewardedAd();
-                    runOnUiThread(() -> {
-                        mainWebView.evaluateJavascript("javascript:addLog('❌ दोनों नेटवर्क्स के ऐड उपलब्ध नहीं हैं।');", null);
-                        mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-                    });
-                }
-            });
-        } else {
-            loadStartIoRewardedAd();
-            loadAdMobRewardedAd();
-            runOnUiThread(() -> {
-                mainWebView.evaluateJavascript("javascript:addLog('⏳ ऐड लोड हो रहा है, कृपया पुनः प्रयास करें...');", null);
-                mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
-            });
-        }
+            @Override
+            public void adNotDisplayed(Ad ad) {
+                loadStartIoRewardedAd();
+                runOnUiThread(() -> {
+                    mainWebView.evaluateJavascript("javascript:addLog('❌ ऐड डिस्प्ले नहीं हो सका, पुनः प्रयास करें।');", null);
+                    mainWebView.evaluateJavascript("javascript:enableAdButton();", null);
+                });
+            }
+        });
     }
 
     // --- Interstitial Ad Methods (On Step Sync) ---
@@ -384,7 +415,7 @@ public class MainActivity extends AppCompatActivity {
                     showAdWhenReady = true;
                     mainWebView.evaluateJavascript("javascript:addLog('⏳ AdMob कनेक्ट किया जा रहा है...');", null);
                 } else if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
-                    triggerStartIoRewardedFallback();
+                    showStartIoAdNow();
                 } else {
                     showAdWhenReady = true;
                     loadAdMobRewardedAd();
