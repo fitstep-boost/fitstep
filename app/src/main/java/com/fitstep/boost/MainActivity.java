@@ -197,8 +197,7 @@ public class MainActivity extends AppCompatActivity {
         startIoBannerView.setLayoutParams(params);
         bannerContainer.addView(startIoBannerView);
     }
-
-    // --- Rewarded Ad Methods (AdMob Primary) ---
+        // --- Rewarded Ad Methods (AdMob Primary) ---
     private void loadAdMobRewardedAd() {
         if (mAdMobRewardedAd != null || isAdMobLoading) return;
         isAdMobLoading = true;
@@ -220,7 +219,6 @@ public class MainActivity extends AppCompatActivity {
                 mAdMobRewardedAd = null;
                 isAdMobLoading = false;
                 if (showAdWhenReady) {
-                    // AdMob नहीं मिला, सीधे Start.io फॉलबैक ट्रिगर करें
                     runOnUiThread(() -> {
                         mainWebView.evaluateJavascript("javascript:addLog('⚠️ AdMob उपलब्ध नहीं -> Start.io बैकअप लोड हो रहा है...');", null);
                         triggerStartIoRewardedFallback();
@@ -261,7 +259,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- Start.io Bulletproof Mode ---
+    // --- Start.io Bulletproof Mode (100% Fill Rate) ---
     private void loadStartIoRewardedAd() {
         if (isStartIoLoading) return;
         isStartIoLoading = true;
@@ -270,7 +268,6 @@ public class MainActivity extends AppCompatActivity {
             mStartAppRewardedAd = new StartAppAd(this);
         }
 
-        // AUTOMATIC मोड 100% इन्वेंट्री देता है (No-Fill शून्य हो जाता है)
         mStartAppRewardedAd.loadAd(StartAppAd.AdMode.AUTOMATIC, new AdEventListener() {
             @Override
             public void onReceiveAd(Ad ad) {
@@ -299,7 +296,6 @@ public class MainActivity extends AppCompatActivity {
         if (mStartAppRewardedAd != null && mStartAppRewardedAd.isReady()) {
             showStartIoAdNow();
         } else {
-            // अगर तैयार नहीं है, तो यूजर को भगाने के बजाय लोड करके स्क्रीन पर पॉप-अप करें
             showAdWhenReady = true;
             runOnUiThread(() -> {
                 mainWebView.evaluateJavascript("javascript:addLog('⏳ Start.io बैकअप ऐड लोड हो रहा है, कृपया 2-3 सेकंड रुकें...');", null);
@@ -313,7 +309,6 @@ public class MainActivity extends AppCompatActivity {
             mainWebView.evaluateJavascript("javascript:addLog('🔄 Start.io बैकअप ऐड दिखाया जा रहा है...');", null);
         });
 
-        // 1. वीडियो लिसनर (अगर वीडियो चला)
         mStartAppRewardedAd.setVideoListener(new VideoListener() {
             @Override
             public void onVideoCompleted() {
@@ -323,13 +318,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // 2. डिस्प्ले लिसनर (अगर फुल-स्क्रीन ग्राफिक ऐड चला)
         mStartAppRewardedAd.showAd(new AdDisplayListener() {
             private boolean isRewardCredited = false;
 
             @Override
             public void adHidden(Ad ad) {
-                // जब यूजर ऐड बंद (Cross) करे, तभी रिवॉर्ड मिले
                 if (!isRewardCredited) {
                     isRewardCredited = true;
                     runOnUiThread(() -> {
@@ -356,7 +349,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // --- Interstitial Ad Methods (On Step Sync) ---
+    // --- Interstitial Ad Methods ---
     private void loadInterstitialAd() {
         if (isInterstitialLoading || mAdMobInterstitialAd != null) return;
         isInterstitialLoading = true;
@@ -404,8 +397,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- JavaScript Interface Bridge ---
+    // --- JavaScript Interface Bridge (Version 2.0 Identifier) ---
     public class WebAppInterface {
+        @JavascriptInterface
+        public String getNativeVersion() {
+            return "2.0"; // यह नए ऐप का वर्जन रिपोर्ट करेगा
+        }
+
         @JavascriptInterface
         public void showRewardedAd() {
             runOnUiThread(() -> {
