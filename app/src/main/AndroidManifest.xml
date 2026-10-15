@@ -10,9 +10,15 @@
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
+        <!-- AdMob Live App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4526276681965606~9855619306"/>
+
+        <!-- Start.io Live App ID (Revenue Mismatch Fix) -->
+        <meta-data
+            android:name="com.startapp.sdk.APPLICATION_ID"
+            android:value="209703459" />
 
         <activity
             android:name=".MainActivity"
