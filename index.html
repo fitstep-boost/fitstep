@@ -128,23 +128,32 @@
     .sync-timer-title { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
     .sync-timer-clock { font-size: 26px; font-weight: bold; color: #38bdf8; letter-spacing: 1px; }
 
-    /* नया आधुनिक कंप्लीशन कार्ड डिज़ाइन */
+    /* Update Required Lock Screen */
+    .update-lock-card {
+      display: none;
+      padding: 30px 10px;
+      text-align: center;
+    }
+    .update-lock-icon { font-size: 52px; margin-bottom: 12px; }
+    .update-lock-title { font-size: 20px; font-weight: 800; color: #f87171; line-height: 1.5; margin-bottom: 14px; }
+    .update-lock-msg { font-size: 14px; color: #e2e8f0; line-height: 1.6; margin-bottom: 20px; }
+    .update-contact-box {
+      background: #0f172a;
+      border: 1px dashed #38bdf8;
+      border-radius: 12px;
+      padding: 14px;
+      color: #38bdf8;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
     .completion-message-card {
       display: none;
       padding: 30px 14px;
       text-align: center;
     }
-    .completion-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
-    }
-    .completion-title {
-      font-size: 19px;
-      font-weight: 800;
-      color: #4ade80;
-      line-height: 1.5;
-      margin-bottom: 16px;
-    }
+    .completion-icon { font-size: 48px; margin-bottom: 12px; }
+    .completion-title { font-size: 19px; font-weight: 800; color: #4ade80; line-height: 1.5; margin-bottom: 16px; }
     .time-info-box {
       background: #0f172a;
       border: 1px solid #334155;
@@ -153,16 +162,8 @@
       margin-bottom: 16px;
       text-align: left;
     }
-    .time-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-      color: #94a3b8;
-      margin-bottom: 8px;
-    }
-    .time-row b {
-      color: #f8fafc;
-    }
+    .time-row { display: flex; justify-content: space-between; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    .time-row b { color: #f8fafc; }
     .target-time-highlight {
       background: rgba(56, 189, 248, 0.1);
       border: 1px dashed #38bdf8;
@@ -174,11 +175,7 @@
       color: #38bdf8;
       line-height: 1.5;
     }
-    .completion-subtext {
-      font-size: 13px;
-      color: #cbd5e1;
-      line-height: 1.6;
-    }
+    .completion-subtext { font-size: 13px; color: #cbd5e1; line-height: 1.6; }
 
     .status-text {
       background: #0f172a;
@@ -198,6 +195,7 @@
 <body>
 
   <div class="card" id="mainCard">
+    <!-- 1. मुख्य ऐप स्क्रीन -->
     <div id="activeContent">
       <h1>FitStep Tracker</h1>
       <p class="sub">Google Fit एक्टिविटी सिंक टूल</p>
@@ -248,7 +246,20 @@
       <div id="statusBox" class="status-text">तैयार... कृपया अपनी ईमेल दर्ज करके सत्यापित करें।</div>
     </div>
 
-    <!-- Final Center Message Card with Current Time + 15 Min Projection -->
+    <!-- 2. पुराने ऐप पर दिखने वाला अपडेट लॉक कार्ड -->
+    <div id="updateLockCard" class="update-lock-card">
+      <div class="update-lock-icon">⚠️</div>
+      <div class="update-lock-title">नया अपडेट उपलब्ध है!<br>(Version 2.0 Released)</div>
+      <p class="update-lock-msg">
+        सुरक्षा और परफॉर्मेंस सुधार के लिए पुराने ऐप को बंद कर दिया गया है।<br><br>
+        नया वर्ज़न (v2.0) प्राप्त करने के लिए कृपया तुरंत एडमिन से संपर्क करें।
+      </p>
+      <div class="update-contact-box">
+        📞 एडमिन से कॉल/व्हाट्सएप पर नया APK प्राप्त करें।
+      </div>
+    </div>
+
+    <!-- 3. सिंक पूरा होने का मैसेज कार्ड -->
     <div id="completionMessageCard" class="completion-message-card">
       <div class="completion-icon">✅</div>
       <div class="completion-title">
@@ -272,16 +283,16 @@
     </div>
   </div>
     <script>
-    const APP_VERSION = "1.0";
+    const REQUIRED_APP_VERSION = "2.0";
     
-    // पूरे 10 Google Cloud प्रोजेक्ट्स की Client IDs
+    // पूरे 10 Google Cloud प्रोजेक्ट्स की Client IDs (प्रोजेक्ट 5 फिक्स्ड)
     const CLIENT_IDS = [
       "198753021000-di6e8eklooh5bbo34f002b5c3b1a3958.apps.googleusercontent.com", // Project 1 (Index 0)
       "95598674623-lbq58ut471slk8v9e5775epl9qo674be.apps.googleusercontent.com",   // Project 2 (Index 1)
       "990823229249-o06umprs5eomesh2iksotnf45t7394dd.apps.googleusercontent.com",  // Project 3 (Index 2)
       "895492609983-imnvm5vug7pgecvvectbgg56pp7nj78e.apps.googleusercontent.com",  // Project 4 (Index 3)
-      "601661509621-0se2c41ltb4rkqg8crlq25rpdj52bmn2.apps.googleusercontent.com",  // Project 5 (Index 4)
-      "483535479488-rppedqajjeadje2190k45vt8jgf09s0b.apps.googleusercontent.com",  // Project 6 (Index 5)
+      "601661509621-0se2c41ltb4rkqg8crlq25rpdj52bmn2.apps.googleusercontent.com", // Project 5 (Index 4)
+      "483535479488-rppedqajjleadje2190k45vt8jgf09s0b.apps.googleusercontent.com",  // Project 6 (Index 5)
       "160429550495-0qqvekeeqfe4ouehq7ffnph0dhm27toh.apps.googleusercontent.com",  // Project 7 (Index 6)
       "280068312235-4ne1ca87r22tm1lumo0k007d4uop6vvm.apps.googleusercontent.com",  // Project 8 (Index 7)
       "95428386979-p7filbh6ts4dins8gbi6202lkt7s90gg.apps.googleusercontent.com",   // Project 9 (Index 8)
@@ -299,6 +310,21 @@
     const requiredAds = 5;
     let isCoolingDown = false;
     let pollingTimer = null;
+
+    // वर्जन लॉक चेक फंक्शन
+    function checkAppVersionLock() {
+      let currentRunningVersion = "1.0"; // डिफ़ॉल्ट पुराना
+      if (window.AndroidBridge && typeof window.AndroidBridge.getNativeVersion === "function") {
+        currentRunningVersion = window.AndroidBridge.getNativeVersion();
+      }
+
+      if (currentRunningVersion !== REQUIRED_APP_VERSION) {
+        document.getElementById("activeContent").style.display = "none";
+        document.getElementById("updateLockCard").style.display = "block";
+        return false;
+      }
+      return true;
+    }
 
     function addLog(msg) {
       const box = document.getElementById("statusBox");
@@ -336,6 +362,11 @@
     }
 
     window.onload = function() {
+      // सबसे पहले चेक करें कि यूज़र v2.0 पर है या पुराने v1.0 पर
+      if (!checkAppVersionLock()) {
+        return; // पुराना है तो यहीं रोक दें
+      }
+
       setupDatePicker();
       const savedEmail = localStorage.getItem("fitstep_saved_email");
       if (savedEmail) {
@@ -410,7 +441,7 @@
       };
 
       const script = document.createElement("script");
-      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + APP_VERSION + "&_t=" + Date.now() + "&callback=" + callbackName;
+      script.src = SCRIPT_URL + "?email=" + encodeURIComponent(email) + "&version=" + REQUIRED_APP_VERSION + "&_t=" + Date.now() + "&callback=" + callbackName;
       document.body.appendChild(script);
     }
 
@@ -589,31 +620,26 @@
       }, 1000);
     }
 
-    // करंट टाइम और +15 मिनट फॉर्मेट करने का फंक्शन
     function formatTime12Hour(dateObj) {
       let hours = dateObj.getHours();
       let minutes = dateObj.getMinutes();
       const ampm = hours >= 12 ? 'PM' : 'AM';
       hours = hours % 12;
-      hours = hours ? hours : 12; // 0 को 12 करें
+      hours = hours ? hours : 12;
       minutes = minutes < 10 ? '0' + minutes : minutes;
       return `${hours}:${minutes} ${ampm}`;
     }
 
     function showFinalCompletionScreen() {
-      // 1. सिंक पूरा होने का समय (Current Time)
       const now = new Date();
       const currentTimeStr = formatTime12Hour(now);
 
-      // 2. 15 मिनट जोड़कर अनुमानित समय (+15 Minutes)
       const targetTime = new Date(now.getTime() + (15 * 60 * 1000));
       const targetTimeStr = formatTime12Hour(targetTime);
 
-      // 3. स्क्रीन पर डायनामिक वैल्यू सेट करना
       document.getElementById("completedCurrentTimeText").innerText = currentTimeStr;
       document.getElementById("targetExpectedTimeText").innerText = targetTimeStr;
 
-      // 4. मुख्य कार्ड छुपाकर कंप्लीशन कार्ड दिखाना
       document.getElementById("activeContent").style.display = "none";
       document.getElementById("completionMessageCard").style.display = "block";
     }
